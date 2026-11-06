@@ -11,6 +11,11 @@ secondary network. Everything runs client-side — no build step.
 Both pages load the same network model and power-flow engine from
 [`js/gridengine.js`](js/gridengine.js).
 
+Industry terms on both pages get hover tooltips from
+[`js/glossary.js`](js/glossary.js). It finds terms in the rendered text
+automatically, including content that re-renders, so to add or edit a definition,
+change the `TERMS` list there.
+
 ## Run locally
 
 Open `index.html` in a browser, or serve the folder:
