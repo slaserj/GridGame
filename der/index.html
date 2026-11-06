@@ -186,7 +186,7 @@ select { width: 100%; }
   <div class="brand">
     <div class="eyebrow">Jones Grid Systems · DER Interconnection Planner</div>
     <h1>Midtown West Network</h1>
-    <div class="sub">13.8 kV primary · 208Y/120 V secondary grid · Same network as the <a href="../">ADMS operations simulator</a></div>
+    <div class="sub">13.8 kV primary · 208Y/120 V secondary grid · Same network as the <a class="adms-link" href="../">ADMS operations simulator</a></div>
   </div>
   <div class="chips" id="chips"></div>
   <div class="controls">
@@ -255,7 +255,7 @@ select { width: 100%; }
   </div>
 </div>
 
-<p class="foot">Fictional network built for demonstration and training. Names, routes, device IDs, loads, costs and timelines are invented or illustrative and do not represent any utility's actual system, tariff or interconnection rules. Screens are simplified versions of common screening practice. Power flow: balanced positive-sequence nodal solution on the same model as the <a href="../">ADMS simulator</a>; light-load case uses spring midday load with DER at nameplate and the substation LTC lowered by line-drop compensation; peak case uses the summer peak hour with generation not credited, except storage under a firm peak-shaving schedule. Annual energy weights three representative days: summer (122), clear spring/fall (90) and winter/overcast (153). Fault study: bolted three-phase, synchronous machines at X″d = 0.16, inverters at 1.2 × rated current.</p>
+<p class="foot">Fictional network built for demonstration and training. Names, routes, device IDs, loads, costs and timelines are invented or illustrative and do not represent any utility's actual system, tariff or interconnection rules. Screens are simplified versions of common screening practice. Power flow: balanced positive-sequence nodal solution on the same model as the <a class="adms-link" href="../">ADMS simulator</a>; light-load case uses spring midday load with DER at nameplate and the substation LTC lowered by line-drop compensation; peak case uses the summer peak hour with generation not credited, except storage under a firm peak-shaving schedule. Annual energy weights three representative days: summer (122), clear spring/fall (90) and winter/overcast (153). Fault study: bolted three-phase, synchronous machines at X″d = 0.16, inverters at 1.2 × rated current.</p>
 
 <script src="../js/gridengine.js"></script>
 <script>
@@ -1114,6 +1114,16 @@ select { width: 100%; }
   window.addEventListener('message', function (e) { if (e.data && e.data.type === 'gridgame:ping') { last = 0; post(); } });
   try { new ResizeObserver(post).observe(document.body); } catch (e) { setInterval(post, 1000); }
   post();
+})();
+</script>
+<script>
+/* When embedded on jonesgrid.com, open the ADMS simulator in its own site tab instead of inside this frame. */
+(function () {
+  if (window.top === window.self) return;
+  document.querySelectorAll('a.adms-link').forEach(function (a) {
+    a.href = 'https://jonesgrid.com/simulator';
+    a.target = '_top';
+  });
 })();
 </script>
 </body>
