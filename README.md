@@ -35,7 +35,11 @@ python -m http.server 8000
 
 Paste the contents of [`squarespace-embed.html`](squarespace-embed.html) (ADMS)
 or [`squarespace-embed-der.html`](squarespace-embed-der.html) (DER planner) into a
-Squarespace **Code Block**. The game reports its height to the parent page via
+Squarespace **Code Block**.
+
+To make the Squarespace site's typography match the games (Chakra Petch headings,
+IBM Plex Sans body, IBM Plex Mono figures), paste
+[`squarespace-fonts.css`](squarespace-fonts.css) into **Custom CSS**. The game reports its height to the parent page via
 `postMessage`, so the iframe resizes to fit with no inner scrollbar.
 
 *Fictional network built for demonstration and training. Names, routes, device

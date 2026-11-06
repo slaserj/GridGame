@@ -1,0 +1,55 @@
+/* GridGame / Jones Grid Systems typography for the Squarespace site.
+   Paste into Squarespace: Website > Pages > Custom Code > Custom CSS (7.1),
+   or Design > Custom CSS (7.0). Matches the ADMS simulator and DER planner:
+     display  Chakra Petch   - site title, headings, navigation, buttons, labels
+     body     IBM Plex Sans  - paragraphs, lists, forms
+     data     IBM Plex Mono  - code and figures                                    */
+
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
+
+:root {
+  --jg-display: "Chakra Petch", "Bahnschrift", "Arial Narrow", sans-serif;
+  --jg-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --jg-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  /* Squarespace 7.1 site-style font variables */
+  --heading-font-font-family: var(--jg-display);
+  --site-title-font-font-family: var(--jg-display);
+  --nav-font-font-family: var(--jg-display);
+  --body-font-font-family: var(--jg-body);
+  --meta-font-font-family: var(--jg-display);
+  --primary-button-font-font-family: var(--jg-display);
+  --secondary-button-font-font-family: var(--jg-display);
+  --tertiary-button-font-font-family: var(--jg-display);
+}
+
+/* body copy */
+body, p, li, dd, dt, blockquote, figcaption, input, textarea, select, label,
+.sqs-html-content, .sqs-block-content, .form-wrapper {
+  font-family: var(--jg-body) !important;
+}
+
+/* headings and site title: Chakra Petch 600, as in the apps' h1 */
+h1, h2, h3, h4, h5, h6,
+.header-title-text, .header-title-text a, .header-title-logo a, .site-title, .Header-branding {
+  font-family: var(--jg-display) !important;
+  font-weight: 600 !important;
+  letter-spacing: .02em;
+}
+
+/* navigation, buttons and small labels: uppercase, tracked, like the apps' panel headers */
+.header-nav-item a, .header-menu-nav-item a, .header-nav-folder-title, .Header-nav-item,
+.sqs-block-button-element, .sqs-button-element--primary, .sqs-button-element--secondary,
+.sqs-button-element--tertiary, .sqs-editable-button, button, .btn,
+.blog-meta-item, .summary-metadata, .product-meta, .eyebrow {
+  font-family: var(--jg-display) !important;
+  font-weight: 600 !important;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* code and figures */
+code, pre, kbd, samp, .jg-num {
+  font-family: var(--jg-data) !important;
+  font-variant-numeric: tabular-nums;
+}
