@@ -1,0 +1,17 @@
+<!-- GridGame · paste this whole block into a Squarespace Code Block (Code Block, HTML mode, "Display Source" off). -->
+<div style="width:100%;margin:0 auto;background:#090d12;">
+  <iframe id="gridgame-frame" src="https://slaserj.github.io/GridGame/" title="GridGame ADMS simulator"
+          loading="lazy" style="display:block;width:100%;height:1500px;border:0;background:#090d12;"></iframe>
+</div>
+<script>
+(function () {
+  var f = document.getElementById('gridgame-frame');
+  var ORIGIN = 'https://slaserj.github.io';
+  window.addEventListener('message', function (e) {
+    if (e.origin !== ORIGIN || e.source !== f.contentWindow) return;
+    var d = e.data;
+    if (d && d.type === 'gridgame:height' && d.height > 0) f.style.height = d.height + 'px';
+  });
+  f.addEventListener('load', function () { f.contentWindow.postMessage({ type: 'gridgame:ping' }, ORIGIN); });
+})();
+</script>

@@ -1381,4 +1381,19 @@ svg text { font-family: var(--f-data); }
 })();
 
 </script>
+<script>
+/* Embed support: when framed (e.g. Squarespace), report content height to the parent page. */
+(function () {
+  if (window.parent === window) return;
+  var last = 0;
+  function post() {
+    var h = Math.ceil(document.body.getBoundingClientRect().height);
+    if (h && h !== last) { last = h; window.parent.postMessage({ type: 'gridgame:height', height: h }, '*'); }
+  }
+  window.addEventListener('load', post);
+  window.addEventListener('message', function (e) { if (e.data && e.data.type === 'gridgame:ping') { last = 0; post(); } });
+  try { new ResizeObserver(post).observe(document.body); } catch (e) { setInterval(post, 1000); }
+  post();
+})();
+</script>
 </body></html>
