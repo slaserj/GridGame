@@ -1,0 +1,1384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><style>html,body{margin:0}[hidden]{display:none!important}</style>
+<title>Midtown West ADMS · GridGame</title>
+<meta name="description" content="GridGame: a browser-based distribution operations (ADMS) simulator for a fictional 13.8 kV / 208Y-120 V secondary network.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+</head><body>
+<style>
+/* Layout: control-room console — header strip, geographic network view + substation one-line,
+   then study results and the alarm / event console underneath. Deliberately single dark theme. */
+:root {
+  color-scheme: dark;
+  --bg: #090d12; --panel: #0f151c; --panel2: #141c25; --rule: #1f2b38; --rule2: #2a3a4b;
+  --text: #cfd9e3; --dim: #8291a1; --faint: #4c5b6b;
+  --block: #111921; --street: #0b1016; --water: #0b1822; --waterline: #14303f;
+  --hv: #b897ff; --mv: #f2a93b; --lv: #3cc4cf; --dead: #3a4552;
+  --closed: #e5484d; --open: #36b86a;
+  --ok: #36b86a; --warn: #f2c94c; --crit: #ff4d4f; --info: #6aa8ff;
+  --f-display: "Chakra Petch", "Bahnschrift", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+html, body { background: var(--bg); color: var(--text); }
+body { font-family: var(--f-body); font-size: 14px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 28px; }
+* { box-sizing: border-box; }
+button, select, input { font: inherit; color: inherit; }
+.num { font-family: var(--f-data); font-variant-numeric: tabular-nums; }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; justify-content: space-between;
+  border: 1px solid var(--rule); background: var(--panel); padding: 12px 16px; }
+.brand .eyebrow { font-family: var(--f-display); font-size: 11px; letter-spacing: .22em; color: var(--mv); text-transform: uppercase; }
+.brand h1 { margin: 2px 0 0; font-family: var(--f-display); font-weight: 600; font-size: 22px; letter-spacing: .02em; text-wrap: balance; }
+.brand .sub { color: var(--dim); font-size: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 1px solid var(--rule2); background: var(--panel2); padding: 5px 10px; min-width: 88px; }
+.chip .k { font-family: var(--f-display); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+.chip .v { font-family: var(--f-data); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chip.ok .v { color: var(--ok); } .chip.warn .v { color: var(--warn); } .chip.crit .v { color: var(--crit); }
+.chip.crit { border-color: color-mix(in srgb, var(--crit) 55%, var(--rule2)); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.ctl { display: flex; flex-direction: column; gap: 3px; }
+.ctl label { font-family: var(--f-display); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+input[type=range] { accent-color: var(--mv); width: 150px; }
+select { background: var(--panel2); border: 1px solid var(--rule2); padding: 5px 8px; }
+.btn { background: var(--panel2); border: 1px solid var(--rule2); padding: 6px 12px; cursor: pointer;
+  font-family: var(--f-display); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+.btn:hover:not(:disabled) { border-color: var(--dim); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.primary { border-color: var(--mv); color: var(--mv); }
+.btn.danger { border-color: var(--crit); color: var(--crit); }
+.btn.go { border-color: var(--open); color: var(--open); }
+:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+/* grid */
+.grid { display: grid; gap: 12px; margin-top: 12px; grid-template-columns: minmax(0, 1fr) 372px; }
+.panel { border: 1px solid var(--rule); background: var(--panel); min-width: 0; }
+.ph { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--rule); }
+.ph h2 { margin: 0; font-family: var(--f-display); font-size: 12px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; }
+.ph .meta { color: var(--dim); font-size: 11px; font-family: var(--f-data); }
+.side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.mapwrap { overflow-x: auto; }
+#map { display: block; width: 100%; min-width: 620px; height: auto; }
+#oneline { display: block; width: 100%; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 8px 12px; border-top: 1px solid var(--rule); color: var(--dim); font-size: 11px; }
+.legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; }
+.legend b { display: inline-block; width: 10px; height: 10px; vertical-align: -1px; margin-right: 6px; }
+
+/* svg */
+svg text { font-family: var(--f-data); }
+.sel-hit { cursor: pointer; }
+.flow { stroke-dasharray: 2 14; animation: flow 1.6s linear infinite; }
+.flow.rev { animation-direction: reverse; }
+@keyframes flow { to { stroke-dashoffset: -32; } }
+.blink { animation: blink 1s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .flow { animation: none; stroke-dasharray: none; opacity: .0; } .blink { animation: none; } }
+
+/* device panel */
+.dev { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.dev h3 { margin: 0; font-family: var(--f-display); font-size: 18px; font-weight: 600; }
+.dev .type { color: var(--dim); font-size: 12px; }
+.state { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-display); font-weight: 600; letter-spacing: .1em; font-size: 13px; }
+.state .sq { width: 14px; height: 14px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 12px; }
+.kv dt { color: var(--dim); } .kv dd { margin: 0; font-family: var(--f-data); font-variant-numeric: tabular-nums; text-align: right; }
+.phases { display: grid; grid-template-columns: 54px repeat(3, 1fr); gap: 2px 8px; font-size: 12px; font-family: var(--f-data); font-variant-numeric: tabular-nums; }
+.phases .h { color: var(--dim); font-family: var(--f-display); font-size: 10px; letter-spacing: .14em; text-align: right; }
+.phases .h:first-child { text-align: left; }
+.phases span { text-align: right; } .phases span.l { text-align: left; color: var(--dim); }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
+.sbo { border: 1px dashed var(--warn); padding: 8px 10px; color: var(--warn); font-size: 12px; display: flex; flex-direction: column; gap: 8px; }
+.note { color: var(--dim); font-size: 12px; margin: 0; }
+.tagbadge { color: #10151b; background: var(--warn); font-family: var(--f-display); font-weight: 700; font-size: 11px; padding: 1px 6px; letter-spacing: .1em; }
+.brief ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; max-width: 62ch; }
+.brief b { color: var(--text); }
+
+/* results + console */
+.lower { display: grid; gap: 12px; margin-top: 12px; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tbl th { font-family: var(--f-display); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.tbl th:first-child, .tbl td:first-child { text-align: left; }
+.tbl td { padding: 5px 10px; border-bottom: 1px solid color-mix(in srgb, var(--rule) 60%, transparent); text-align: right; font-family: var(--f-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tbl td.lab { font-family: var(--f-body); color: var(--text); }
+.tbl td .loc { display: block; color: var(--dim); font-size: 10.5px; font-family: var(--f-body); }
+.tbl tr.clickable { cursor: pointer; } .tbl tr.clickable:hover td { background: var(--panel2); }
+.tblwrap { overflow-x: auto; }
+.c-ok { color: var(--ok); } .c-warn { color: var(--warn); } .c-crit { color: var(--crit); } .c-dim { color: var(--faint); }
+.pill { font-family: var(--f-display); font-size: 10px; font-weight: 600; letter-spacing: .12em; padding: 1px 6px; border: 1px solid currentColor; }
+.stack { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.alarms, .events { list-style: none; margin: 0; padding: 0; max-height: 230px; overflow-y: auto; }
+.alarms li { display: grid; grid-template-columns: 6px 64px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 12px 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--rule) 60%, transparent); font-size: 12px; }
+.alarms .bar { align-self: stretch; }
+.alarms .sev { font-family: var(--f-display); font-size: 10px; letter-spacing: .14em; font-weight: 700; }
+.alarms li.unack .txt { font-weight: 600; }
+.alarms .ack { font-size: 10px; padding: 2px 8px; }
+.alarms .empty, .events .empty { padding: 12px; color: var(--dim); font-size: 12px; grid-template-columns: 1fr; }
+.events li { display: grid; grid-template-columns: 66px minmax(0, 1fr); gap: 10px; padding: 4px 12px; font-size: 12px; border-bottom: 1px solid color-mix(in srgb, var(--rule) 40%, transparent); }
+.events time { font-family: var(--f-data); color: var(--dim); font-variant-numeric: tabular-nums; }
+.foot { margin-top: 14px; color: var(--faint); font-size: 11px; max-width: 110ch; }
+
+/* protector board + chips */
+.npboard { padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.nprow { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 8px; align-items: center; }
+.npf { font-family: var(--f-data); font-size: 12px; font-weight: 600; cursor: pointer; }
+.npchips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.npchip { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 7px; background: var(--panel2); border: 1px solid var(--rule2); cursor: pointer; font-size: 11px; text-align: left; }
+.npchip:hover { border-color: var(--dim); }
+.npchip.on { border-color: var(--text); }
+.npchip .sq { width: 9px; height: 9px; flex: none; }
+.npchip .npid { font-family: var(--f-data); font-weight: 600; }
+.npchip .npst { font-family: var(--f-display); font-size: 9.5px; letter-spacing: .1em; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.npchip .tagbadge { padding: 0 4px; font-size: 9px; }
+.grp { border-top: 1px solid var(--rule); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.grp .npchips { grid-template-columns: minmax(0, 1fr); }
+.grp-h { font-family: var(--f-display); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+@media (max-width: 560px) { .npchip .npst { display: none; } }
+
+[hidden] { display: none !important; }
+/* minimize toggle */
+.ph h2 { white-space: nowrap; }
+.phr .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phr { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mintog { width: 24px; height: 22px; display: grid; place-items: center; background: var(--panel2); border: 1px solid var(--rule2); cursor: pointer; font-family: var(--f-data); font-size: 14px; line-height: 1; color: var(--dim); flex: none; }
+.mintog:hover { color: var(--text); border-color: var(--dim); }
+.ph.collapsed { border-bottom: 0; }
+
+/* system controls */
+.sys { border-top: 1px solid var(--rule); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.sysrow { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--dim); }
+.seg { display: inline-flex; }
+.seg .btn { padding: 4px 10px; font-size: 11px; }
+.seg .btn + .btn { border-left-width: 0; }
+.btn.on { background: color-mix(in srgb, var(--mv) 18%, var(--panel2)); border-color: var(--mv); color: var(--mv); }
+
+/* mission */
+.mission { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.mission h3 { margin: 0; font-family: var(--f-display); font-size: 18px; font-weight: 600; }
+.mission .type { color: var(--dim); font-size: 12px; }
+.scens { display: flex; flex-direction: column; gap: 8px; }
+.scen { border: 1px solid var(--rule2); background: var(--panel2); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.scen p { margin: 0; font-size: 12px; color: var(--dim); }
+.scen-h, .scen-f { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.scen-h b { font-family: var(--f-display); font-size: 15px; font-weight: 600; letter-spacing: .02em; }
+.scen-f span { font-size: 11px; }
+.diff { font-size: 11px; letter-spacing: 1px; }
+.diff.d1 { color: var(--ok); } .diff.d2 { color: var(--warn); } .diff.d3 { color: var(--crit); }
+.mhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.mclock { text-align: right; font-size: 11px; }
+.big { font-size: 22px; font-weight: 600; line-height: 1.1; }
+.tip { border-left: 2px solid var(--mv); padding-left: 8px; }
+.objs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; }
+.objs li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 6px; }
+.objs em { font-style: normal; font-size: 11px; }
+.mstats { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; border-block: 1px solid var(--rule); padding-block: 8px; font-size: 12px; align-items: end; }
+.mstats > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mstats .k { font-family: var(--f-display); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.mission .btnrow { justify-content: space-between; }
+.deb { display: flex; gap: 14px; align-items: center; }
+.grade { font-family: var(--f-display); font-size: 44px; font-weight: 700; width: 64px; height: 64px; display: grid; place-items: center; border: 2px solid currentColor; flex: none; }
+.gA, .gB { color: var(--ok); } .gC, .gD { color: var(--warn); } .gF { color: var(--crit); }
+.tbl.score td { padding: 4px 0; }
+
+@media (max-width: 1080px) { .grid { grid-template-columns: minmax(0, 1fr); } .lower { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .brand h1 { font-size: 18px; } input[type=range] { width: 120px; } .chip { min-width: 0; flex: 1 1 40%; } }
+</style>
+
+<header class="top">
+  <div class="brand">
+    <div class="eyebrow">Jones Grid Systems · ADMS Simulator</div>
+    <h1>Midtown West Network</h1>
+    <div class="sub">13.8 kV primary · 208Y/120 V secondary grid · Distribution operations console</div>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="controls">
+    <div class="ctl"><label for="load">Network load <span id="loadv" class="num"></span></label>
+      <input id="load" type="range" min="40" max="120" step="1" value="85"></div>
+    <div class="ctl"><label for="evt">Inject event</label>
+      <div class="btnrow"><select id="evt">
+        <option value="fault">Primary cable fault</option>
+        <option value="tr1">Substation TR1 trip</option>
+        <option value="tr2">Substation TR2 trip</option>
+        <option value="heat">Heat wave (110% load)</option>
+      </select><button class="btn primary" id="inject">Inject</button></div></div>
+    <div class="ctl"><label>&nbsp;</label><button class="btn" id="reset">Reset</button></div>
+  </div>
+</header>
+
+<div class="grid">
+  <section class="panel">
+    <div class="ph"><h2>Network view · geographic</h2><span class="meta" id="mapmeta"></span></div>
+    <div class="mapwrap"><svg id="map" viewBox="-470 -110 1330 870" role="img" aria-label="Map of the Midtown West secondary network"></svg></div>
+    <div class="legend">
+      <span><i style="background:var(--hv)"></i>138 kV</span>
+      <span><i style="background:var(--mv)"></i>13.8 kV primary feeder</span>
+      <span><i style="background:var(--lv)"></i>208/120 V secondary main</span>
+      <span><i style="background:var(--dead)"></i>De-energized</span>
+      <span><b style="background:var(--closed)"></b>Breaker / NP closed</span>
+      <span><b style="background:var(--open)"></b>Open</span>
+      <span><b style="border:2px solid var(--warn)"></b>Vault ≥ 100 %</span>
+      <span><b style="border:2px solid var(--crit)"></b>Vault ≥ 130 %</span>
+    </div>
+  </section>
+  <div class="side">
+    <section class="panel">
+      <div class="ph"><h2>Shift scenarios</h2><div class="phr"><span class="meta" id="mission-meta"></span><button class="mintog" id="mission-toggle" aria-expanded="true" aria-controls="mission" title="Minimize">–</button></div></div>
+      <div class="mission" id="mission"></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Hudson Area Substation</h2><span class="meta">one-line</span></div>
+      <svg id="oneline" viewBox="0 0 360 300" role="img" aria-label="Substation one-line diagram"></svg>
+      <div class="sys" id="sysctl"></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Device control</h2><span class="meta">SCADA · select-before-operate</span></div>
+      <div class="dev" id="dev"></div>
+    </section>
+  </div>
+</div>
+
+<div class="lower">
+  <div class="stack">
+    <section class="panel">
+      <div class="ph"><h2>Power flow study</h2><span class="meta" id="pfmeta"></span></div>
+      <div class="tblwrap"><table class="tbl" id="study"></table></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Primary feeders</h2><span class="meta">UBLF phase amps · DPF balanced amps</span></div>
+      <div class="tblwrap"><table class="tbl" id="feeders"></table></div>
+    </section>
+  </div>
+  <div class="stack">
+    <section class="panel">
+      <div class="ph"><h2>Network protector board</h2><span class="meta">click a protector to control it</span></div>
+      <div class="npboard" id="npboard"></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Alarms</h2><button class="btn" id="ackall" style="padding:3px 10px;font-size:10px">Acknowledge all</button></div>
+      <ul class="alarms" id="alarms"></ul>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Event log</h2><span class="meta">newest first</span></div>
+      <ul class="events" id="events"></ul>
+    </section>
+  </div>
+</div>
+
+<p class="foot">Fictional network built for demonstration and training. Names, routes, device IDs and loads are invented and do not represent any utility's actual system. Power flow: per-unit nodal current-injection solution; UBLF uses 3×3 phase impedance matrices and per-phase loads, DPF uses the balanced positive-sequence equivalent.</p>
+
+<script>
+/* ==========================================================================
+   Midtown West Network — ADMS simulation engine
+   Fictional 13.8 kV / 208Y-120 V Manhattan-style secondary network.
+   Per-unit, phase-frame nodal current-injection power flow.
+     UBLF : 3-phase unbalanced load flow (phase impedance matrices, per-phase loads)
+     DPF  : balanced positive-sequence distribution power flow (single-phase equivalent)
+   ========================================================================== */
+(function (G) {
+  'use strict';
+
+  const SB = 1.0;                       // system base, MVA (3-phase)
+  const VSET = 1.05;                    // 138 kV source / LTC-regulated set point, pu
+  const NP = 1.0, NQ = 2.5;             // load voltage exponents (real ~ constant current, reactive ~ impedance-like)
+  const TAU = 2 * Math.PI / 3;
+  const PHA = [0, -TAU, TAU];
+  const ZB = { mv: 13.8 * 13.8 / SB, lv: 0.208 * 0.208 / SB };
+
+  /* ---------- dense complex LU ---------- */
+  function luFactor(n, re, im) {
+    const piv = new Int32Array(n);
+    for (let k = 0; k < n; k++) {
+      let p = k, best = -1;
+      for (let i = k; i < n; i++) {
+        const m = re[i * n + k] ** 2 + im[i * n + k] ** 2;
+        if (m > best) { best = m; p = i; }
+      }
+      if (best < 1e-30) throw new Error('Singular admittance matrix');
+      piv[k] = p;
+      if (p !== k) {
+        for (let j = 0; j < n; j++) {
+          let t = re[k * n + j]; re[k * n + j] = re[p * n + j]; re[p * n + j] = t;
+          t = im[k * n + j]; im[k * n + j] = im[p * n + j]; im[p * n + j] = t;
+        }
+      }
+      const pr = re[k * n + k], pi = im[k * n + k], d = pr * pr + pi * pi;
+      for (let i = k + 1; i < n; i++) {
+        const ar = re[i * n + k], ai = im[i * n + k];
+        if (ar === 0 && ai === 0) continue;
+        const lr = (ar * pr + ai * pi) / d, li = (ai * pr - ar * pi) / d;
+        re[i * n + k] = lr; im[i * n + k] = li;
+        for (let j = k + 1; j < n; j++) {
+          const ur = re[k * n + j], ui = im[k * n + j];
+          if (ur === 0 && ui === 0) continue;
+          re[i * n + j] -= lr * ur - li * ui;
+          im[i * n + j] -= lr * ui + li * ur;
+        }
+      }
+    }
+    return piv;
+  }
+  function luSolve(n, re, im, piv, br, bi) {
+    for (let k = 0; k < n; k++) {
+      const p = piv[k];
+      if (p !== k) { let t = br[k]; br[k] = br[p]; br[p] = t; t = bi[k]; bi[k] = bi[p]; bi[p] = t; }
+    }
+    for (let i = 0; i < n; i++) {
+      let sr = br[i], si = bi[i];
+      for (let j = 0; j < i; j++) {
+        const lr = re[i * n + j], li = im[i * n + j];
+        if (lr === 0 && li === 0) continue;
+        sr -= lr * br[j] - li * bi[j]; si -= lr * bi[j] + li * br[j];
+      }
+      br[i] = sr; bi[i] = si;
+    }
+    for (let i = n - 1; i >= 0; i--) {
+      let sr = br[i], si = bi[i];
+      for (let j = i + 1; j < n; j++) {
+        const ur = re[i * n + j], ui = im[i * n + j];
+        if (ur === 0 && ui === 0) continue;
+        sr -= ur * br[j] - ui * bi[j]; si -= ur * bi[j] + ui * br[j];
+      }
+      const pr = re[i * n + i], pi = im[i * n + i], d = pr * pr + pi * pi;
+      br[i] = (sr * pr + si * pi) / d; bi[i] = (si * pr - sr * pi) / d;
+    }
+  }
+  function cinv(n, re, im) {
+    const R = Float64Array.from(re), I = Float64Array.from(im);
+    const piv = luFactor(n, R, I);
+    const oR = new Float64Array(n * n), oI = new Float64Array(n * n);
+    for (let c = 0; c < n; c++) {
+      const br = new Float64Array(n), bi = new Float64Array(n); br[c] = 1;
+      luSolve(n, R, I, piv, br, bi);
+      for (let r = 0; r < n; r++) { oR[r * n + c] = br[r]; oI[r * n + c] = bi[r]; }
+    }
+    return { re: oR, im: oI };
+  }
+  function phaseZ(z1, z0) {
+    const sr = (z0[0] + 2 * z1[0]) / 3, sx = (z0[1] + 2 * z1[1]) / 3;
+    const mr = (z0[0] - z1[0]) / 3, mx = (z0[1] - z1[1]) / 3;
+    const re = new Float64Array(9), im = new Float64Array(9);
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+      re[i * 3 + j] = i === j ? sr : mr; im[i * 3 + j] = i === j ? sx : mx;
+    }
+    return { re, im };
+  }
+
+  /* ---------- network model ---------- */
+  const AVES = [{ n: '11 Av', k: '11', x: 0 }, { n: '10 Av', k: '10', x: 260 }, { n: '9 Av', k: '9', x: 520 }, { n: '8 Av', k: '8', x: 780 }];
+  const STS = [{ n: 'W 52 St', num: 52, y: 0 }, { n: 'W 50 St', num: 50, y: 160 }, { n: 'W 48 St', num: 48, y: 320 }, { n: 'W 46 St', num: 46, y: 480 }, { n: 'W 44 St', num: 44, y: 640 }];
+  const SUB = { x: -330, y: 300, name: 'Hudson Area Substation' };
+  // feeder supplying the network transformer vault at [street][avenue]; 0 = no vault
+  const VAULT_FEEDER = [[0, 1, 2, 3], [0, 5, 6, 1], [2, 3, 4, 5], [6, 1, 2, 3], [4, 5, 6, 4]];
+  // spot loads at 100 % (summer peak): [kW 3-ph, description, pf, customers]
+  const LOADS = [
+    [[350, 'Residential towers', 0.96, 410], [505, 'Residential over retail', 0.94, 380], [650, 'Hotel', 0.90, 12], [800, 'Theater & hotel', 0.90, 9]],
+    [[315, 'Parking garages', 0.92, 6], [530, 'Residential', 0.95, 520], [680, 'Office', 0.90, 14], [860, 'Office tower', 0.89, 3]],
+    [[375, 'Auto showrooms', 0.91, 8], [580, 'Mixed use', 0.93, 240], [630, 'Restaurant row', 0.88, 46], [750, 'Theater district', 0.90, 11]],
+    [[300, 'Residential walk-ups', 0.96, 330], [570, 'Mixed use', 0.93, 210], [615, 'Restaurant row', 0.88, 52], [815, 'Hotel & office', 0.90, 7]],
+    [[430, 'Telecom hub', 0.95, 2], [500, 'Residential', 0.95, 470], [565, 'Retail', 0.91, 64], [680, 'Office', 0.90, 10]]
+  ];
+  const NTX_KVA = 1000;
+  const FEEDER_RATING_A = 380;          // 500 kcmil Cu 3/c, normal
+  // impedances (ohm/km)
+  const PRI_Z1 = [0.090, 0.110], PRI_Z0 = [0.50, 0.30];             // 13.8 kV 500 kcmil 3/c
+  const SEC_Z1 = [0.102 / 6, 0.082 / 6];                             // 6 x 500 kcmil 600 V per phase
+  const SEC_Z0 = [SEC_Z1[0] * 3, SEC_Z1[1] * 3];
+
+  function zPolar(mag, xr) { const r = mag / Math.sqrt(1 + xr * xr); return [r, r * xr]; }
+  function scaleZ(zkm, km, zb) { return [zkm[0] * km / zb, zkm[1] * km / zb]; }
+
+  function buildModel() {
+    const nodes = [], branches = [], switches = [], loads = [], vaults = [], feeders = [], gridNodes = [], mains = [];
+    const nIndex = new Map();
+    const addNode = (id, kind, x, y, label) => { nIndex.set(id, nodes.length); nodes.push({ id, kind, x, y, label: label || id }); return id; };
+    const addBr = (o) => { o.fi = nIndex.get(o.f); o.ti = nIndex.get(o.t); branches.push(o); return o; };
+    const addSw = (o) => { o.fi = nIndex.get(o.f); o.ti = nIndex.get(o.t); switches.push(o); return o; };
+
+    // Substation: 2 x 138/13.8 kV transformers, 2 bus sections, normally-open bus tie
+    for (const k of [1, 2]) {
+      addNode('HV' + k, 'hv', SUB.x, SUB.y, '138 kV supply ' + k);
+      addNode('TR' + k + 'L', 'mv', SUB.x, SUB.y, 'TR' + k + ' 13.8 kV terminal');
+      addNode('BUS' + k, 'mv', SUB.x, SUB.y, '13.8 kV bus section ' + k);
+      const z = zPolar(0.10 * SB / 30, 30);
+      addBr({ id: 'TR' + k, kind: 'subtx', f: 'HV' + k, t: 'TR' + k + 'L', z1: z, z0: z, ratingMVA: 30, label: 'TR' + k + ' 138/13.8 kV 30 MVA' });
+      addSw({ id: 'CB-TR' + k, kind: 'cb', f: 'TR' + k + 'L', t: 'BUS' + k, normal: true, label: 'TR' + k + ' 13.8 kV main breaker', branch: 'TR' + k });
+    }
+    addSw({ id: 'CB-BT', kind: 'tie', f: 'BUS1', t: 'BUS2', normal: false, label: 'Bus tie breaker 1–2' });
+
+    // Secondary grid nodes (208Y/120 V)
+    STS.forEach((st, s) => AVES.forEach((av, a) => {
+      const id = `N${st.num}-${av.k}`;
+      addNode(id, 'lv', av.x, st.y, `${st.n} & ${av.n}`);
+      const L = LOADS[s][a];
+      const seed = Math.sin((s + 1) * 12.9898 + (a + 1) * 78.233) * 43758.5453;
+      const r = (q) => (Math.abs(Math.sin(seed * q)) - 0.5) * 0.24;
+      let w = [1 + r(1.3), 1 + r(2.7), 1 + r(4.1)];
+      if (s === 3 && a === 0) w = [1.38, 0.90, 0.72];        // walk-ups: lopsided single-phase load
+      const ws = w[0] + w[1] + w[2]; w = w.map(v => v * 3 / ws);
+      const tan = Math.tan(Math.acos(L[2]));
+      loads.push({ node: id, kw: L[0], pf: L[2], desc: L[1], cust: L[3],
+        p: w.map(v => L[0] / 3 * v), q: w.map(v => L[0] / 3 * v * tan) });
+      gridNodes.push({ id, s, a, label: `${st.n} & ${av.n}`, desc: L[1] });
+    }));
+    // Secondary mains: streets (E-W, 260 m) and avenues (N-S, 160 m)
+    STS.forEach((st, s) => AVES.forEach((av, a) => {
+      const id = `N${st.num}-${av.k}`;
+      if (a < 3) { const to = `N${st.num}-${AVES[a + 1].k}`;
+        mains.push(addBr({ id: `M:${id}>${to}`, kind: 'main', f: id, t: to, lenM: 260, z1: scaleZ(SEC_Z1, 0.26, ZB.lv), z0: scaleZ(SEC_Z0, 0.26, ZB.lv), ratingA: 2400, street: st.n })); }
+      if (s < 4) { const to = `N${STS[s + 1].num}-${av.k}`;
+        mains.push(addBr({ id: `M:${id}>${to}`, kind: 'main', f: id, t: to, lenM: 160, z1: scaleZ(SEC_Z1, 0.16, ZB.lv), z0: scaleZ(SEC_Z0, 0.16, ZB.lv), ratingA: 2400, street: av.n })); }
+    }));
+
+    // Network transformer vaults + protectors
+    STS.forEach((st, s) => AVES.forEach((av, a) => {
+      const f = VAULT_FEEDER[s][a]; if (!f) return;
+      const key = `${st.num}-${av.k}`;
+      const v = { id: 'V' + key, tr: 'TR' + key, np: 'NP' + key, node: `N${key}`, feeder: 'MW0' + f,
+        x: av.x + 34, y: st.y + 34, label: `Vault ${key} · ${st.n} & ${av.n}` };
+      addNode('P' + key, 'mv', v.x, v.y, `${v.tr} primary`);
+      addNode('S' + key, 'lv', v.x, v.y, `${v.tr} secondary`);
+      const z = zPolar(0.05 * SB / (NTX_KVA / 1000), 7);
+      addBr({ id: v.tr, kind: 'ntx', f: 'P' + key, t: 'S' + key, z1: z, z0: z, ratingKVA: NTX_KVA, vault: v.id });
+      addSw({ id: v.np, kind: 'np', f: 'S' + key, t: v.node, normal: true, label: `Network protector ${key}`, vault: v.id });
+      vaults.push(v);
+    }));
+
+    // Primary feeders: breaker on alternate bus sections, cable chained through vaults
+    for (let k = 1; k <= 6; k++) {
+      const id = 'MW0' + k, bus = (k % 2) ? 1 : 2;
+      const fv = vaults.filter(v => v.feeder === id);
+      const chain = []; let cur = { x: SUB.x, y: SUB.y };
+      const left = fv.slice();
+      while (left.length) {
+        left.sort((p, q) => (Math.abs(p.x - cur.x) + Math.abs(p.y - cur.y)) - (Math.abs(q.x - cur.x) + Math.abs(q.y - cur.y)));
+        cur = left.shift(); chain.push(cur);
+      }
+      addNode(id + 'H', 'mv', SUB.x, SUB.y, id + ' feeder head');
+      addSw({ id: 'CB-' + id, kind: 'cb', f: 'BUS' + bus, t: id + 'H', normal: true, label: `Feeder ${id} breaker`, feeder: id });
+      let prev = id + 'H', px = SUB.x, py = SUB.y, total = 0; const segs = [];
+      chain.forEach((v, i) => {
+        const len = (Math.abs(v.x - px) + Math.abs(v.y - py)) * 1.12 + (i === 0 ? 220 : 40);
+        total += len;
+        const b = addBr({ id: `C:${id}:${i + 1}`, kind: 'cable', f: prev, t: 'P' + v.id.slice(1), lenM: Math.round(len),
+          z1: scaleZ(PRI_Z1, len / 1000, ZB.mv), z0: scaleZ(PRI_Z0, len / 1000, ZB.mv), ratingA: FEEDER_RATING_A, feeder: id });
+        segs.push(b.id); prev = b.t; px = v.x; py = v.y;
+      });
+      feeders.push({ id, bus, breaker: 'CB-' + id, vaults: chain.map(v => v.id), segs, lenM: Math.round(total), ratingA: FEEDER_RATING_A });
+    }
+
+    // precompute admittances
+    for (const b of branches) {
+      const Z3 = phaseZ(b.z1, b.z0);
+      b.Y3 = cinv(3, Z3.re, Z3.im);
+      const d = b.z1[0] ** 2 + b.z1[1] ** 2;
+      b.Y1 = { re: Float64Array.of(b.z1[0] / d), im: Float64Array.of(-b.z1[1] / d) };
+    }
+    const brById = new Map(branches.map(b => [b.id, b]));
+    const swById = new Map(switches.map(s => [s.id, s]));
+    return { nodes, nIndex, branches, brById, switches, swById, loads, vaults, feeders, gridNodes, mains,
+      AVES, STS, SUB, slacks: ['HV1', 'HV2'], NTX_KVA };
+  }
+
+  function createState(model) {
+    const sw = {};
+    for (const s of model.switches) sw[s.id] = { closed: s.normal, tag: false, manual: false, lockout: '' };
+    return { sw, faults: {}, load: 0.85, vr: 0, dr: false, failed: {} };
+  }
+
+  /* ---------- topology ---------- */
+  const brOut = (state, b) => !!(b.vault && state.failed && state.failed[b.vault]);
+  function trace(model, isClosed, state) {
+    const N = model.nodes.length, adj = Array.from({ length: N }, () => []);
+    for (const b of model.branches) if (!brOut(state, b)) { adj[b.fi].push(b.ti); adj[b.ti].push(b.fi); }
+    for (const s of model.switches) if (isClosed(s)) { adj[s.fi].push(s.ti); adj[s.ti].push(s.fi); }
+    const seen = new Uint8Array(N), q = [];
+    for (const id of model.slacks) { const i = model.nIndex.get(id); seen[i] = 1; q.push(i); }
+    while (q.length) { const i = q.pop(); for (const j of adj[i]) if (!seen[j]) { seen[j] = 1; q.push(j); } }
+    return seen;
+  }
+
+  function topology(model, state) {
+    const N = model.nodes.length, parent = Int32Array.from({ length: N }, (_, i) => i);
+    const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    for (const s of model.switches) if (state.sw[s.id].closed) {
+      const a = find(s.fi), b = find(s.ti); if (a !== b) parent[a] = b;
+    }
+    const rep = new Int32Array(N); for (let i = 0; i < N; i++) rep[i] = find(i);
+    const energ = trace(model, s => state.sw[s.id].closed, state);
+    const slackRep = new Set(model.slacks.map(id => rep[model.nIndex.get(id)]));
+    return { rep, energ, slackRep };
+  }
+
+  /* ---------- power flow ---------- */
+  function powerFlow(model, state, topo, nph) {
+    const { rep, energ, slackRep } = topo;
+    const N = model.nodes.length, idx = new Int32Array(N).fill(-1);
+    let n = 0;
+    for (let i = 0; i < N; i++) if (energ[i] && rep[i] === i && !slackRep.has(i)) idx[i] = n++;
+    const M = n * nph;
+    const vset = VSET * (1 - (state.vr || 0));
+    const Vs = (ph) => [vset * Math.cos(nph === 3 ? PHA[ph] : 0), vset * Math.sin(nph === 3 ? PHA[ph] : 0)];
+    const Yr = new Float64Array(M * M), Yi = new Float64Array(M * M), Cr = new Float64Array(M), Ci = new Float64Array(M);
+    for (const b of model.branches) {
+      const i = rep[b.fi], j = rep[b.ti];
+      if (i === j || !energ[b.fi] || brOut(state, b)) continue;
+      const Y = nph === 3 ? b.Y3 : b.Y1, ii = idx[i], jj = idx[j];
+      for (let p = 0; p < nph; p++) for (let q = 0; q < nph; q++) {
+        const yr = Y.re[p * nph + q], yi = Y.im[p * nph + q];
+        if (ii >= 0) { Yr[(ii * nph + p) * M + ii * nph + q] += yr; Yi[(ii * nph + p) * M + ii * nph + q] += yi; }
+        if (jj >= 0) { Yr[(jj * nph + p) * M + jj * nph + q] += yr; Yi[(jj * nph + p) * M + jj * nph + q] += yi; }
+        if (ii >= 0 && jj >= 0) {
+          Yr[(ii * nph + p) * M + jj * nph + q] -= yr; Yi[(ii * nph + p) * M + jj * nph + q] -= yi;
+          Yr[(jj * nph + p) * M + ii * nph + q] -= yr; Yi[(jj * nph + p) * M + ii * nph + q] -= yi;
+        } else {
+          const f = ii >= 0 ? ii : jj; const [vr, vi] = Vs(q);
+          if (f >= 0) { Cr[f * nph + p] += yr * vr - yi * vi; Ci[f * nph + p] += yr * vi + yi * vr; }
+        }
+      }
+    }
+    // loads: wye, exponential voltage dependence P = P0|V|^NP, Q = Q0|V|^NQ (pu of per-phase base)
+    const Sph = SB * 1000 / 3, Lr = new Float64Array(M), Li = new Float64Array(M), hasLoad = new Uint8Array(M);
+    for (const L of model.loads) {
+      const i = model.nIndex.get(L.node); if (!energ[i]) continue;
+      const k = idx[rep[i]]; if (k < 0) continue;
+      for (let p = 0; p < nph; p++) {
+        const P = nph === 3 ? L.p[p] : L.kw / 3, Q = nph === 3 ? L.q[p] : L.kw / 3 * Math.tan(Math.acos(L.pf));
+        const fct = loadFactor(state, L);
+        Lr[k * nph + p] += P * fct / Sph; Li[k * nph + p] += Q * fct / Sph; hasLoad[k * nph + p] = 1;
+      }
+    }
+    const Vr = new Float64Array(M), Vi = new Float64Array(M);
+    for (let k = 0; k < n; k++) for (let p = 0; p < nph; p++) { const [a, b] = Vs(p); Vr[k * nph + p] = a; Vi[k * nph + p] = b; }
+    let iters = 0, converged = M === 0;
+    if (M > 0) {
+      const piv = luFactor(M, Yr, Yi);
+      for (iters = 1; iters <= 60; iters++) {
+        const br = Float64Array.from(Cr), bi = Float64Array.from(Ci);
+        for (let m = 0; m < M; m++) if (hasLoad[m]) {
+          const d = Vr[m] * Vr[m] + Vi[m] * Vi[m], vm = Math.sqrt(d);
+          const P = Lr[m] * Math.pow(vm, NP), Q = Li[m] * Math.pow(vm, NQ);
+          // I = conj(S/V) = (P - jQ)/conj(V) ; injection = -I
+          const ir = (P * Vr[m] + Q * Vi[m]) / d, ii = (P * Vi[m] - Q * Vr[m]) / d;
+          br[m] -= ir; bi[m] -= ii;
+        }
+        luSolve(M, Yr, Yi, piv, br, bi);
+        let dmax = 0;
+        for (let m = 0; m < M; m++) { dmax = Math.max(dmax, Math.abs(br[m] - Vr[m]) + Math.abs(bi[m] - Vi[m])); Vr[m] = br[m]; Vi[m] = bi[m]; }
+        if (dmax < 1e-9) { converged = true; break; }
+      }
+    }
+    // node voltages
+    const V = (nodeIdx) => {
+      if (!energ[nodeIdx]) return null;
+      const r = rep[nodeIdx];
+      if (slackRep.has(r)) return Array.from({ length: nph }, (_, p) => Vs(p));
+      const k = idx[r]; return Array.from({ length: nph }, (_, p) => [Vr[k * nph + p], Vi[k * nph + p]]);
+    };
+    const nodeV = model.nodes.map((_, i) => V(i));
+    // branch currents (from -> to) and from-end power
+    const brRes = {};
+    for (const b of model.branches) {
+      const vf = nodeV[b.fi], vt = nodeV[b.ti];
+      if (!vf || !vt || brOut(state, b)) { brRes[b.id] = null; continue; }
+      const Y = nph === 3 ? b.Y3 : b.Y1, I = [], S = [];
+      for (let p = 0; p < nph; p++) {
+        let ir = 0, ii = 0;
+        for (let q = 0; q < nph; q++) {
+          const dr = vf[q][0] - vt[q][0], di = vf[q][1] - vt[q][1], yr = Y.re[p * nph + q], yi = Y.im[p * nph + q];
+          ir += yr * dr - yi * di; ii += yr * di + yi * dr;
+        }
+        I.push([ir, ii]);
+        S.push([vf[p][0] * ir + vf[p][1] * ii, vf[p][1] * ir - vf[p][0] * ii]); // V*conj(I)
+      }
+      brRes[b.id] = { I, S };
+    }
+    return { nph, nodeV, brRes, iters, converged };
+  }
+
+  /* ---------- study: automatic logic + UBLF + DPF ---------- */
+  function runStudy(model, state) {
+    const events = [];
+    for (const f of model.feeders) {
+      const s = state.sw[f.breaker];
+      if (state.faults[f.id] && s.closed) { s.closed = false; s.lockout = 'Primary cable fault'; events.push({ sev: 'crit', dev: f.breaker, msg: `${f.id} breaker TRIPPED — primary cable fault, lockout` }); }
+    }
+    for (const k of [1, 2]) {
+      const s = state.sw['CB-TR' + k];
+      if (state.faults['TR' + k] && s.closed) { s.closed = false; s.lockout = 'Transformer differential relay'; events.push({ sev: 'crit', dev: 'CB-TR' + k, msg: `TR${k} main breaker TRIPPED — differential relay, transformer fault` }); }
+    }
+    // Network protector relays: trip on reverse power when the primary feeder is lost,
+    // auto-close when the primary is re-energized (unless blocked open by the operator).
+    const prim = trace(model, s => s.kind !== 'np' && state.sw[s.id].closed, state);
+    for (const s of model.switches) if (s.kind === 'np') {
+      const st = state.sw[s.id], want = !st.manual && !!prim[s.fi];
+      if (st.closed !== want) {
+        st.closed = want;
+        if (!st.manual) events.push(want
+          ? { sev: 'info', dev: s.id, msg: `${s.id} auto-CLOSED — primary feeder restored` }
+          : { sev: 'high', dev: s.id, msg: `${s.id} OPENED on reverse power — primary feeder de-energized` });
+      }
+    }
+    const topo = topology(model, state);
+    const ublf = powerFlow(model, state, topo, 3);
+    const dpf = powerFlow(model, state, topo, 1);
+    return { events, topo, ublf, dpf, summary: summarize(model, state, topo, ublf, dpf) };
+  }
+
+  /* ---------- engineering results ---------- */
+  const mag = (c) => Math.hypot(c[0], c[1]);
+  // demand response curtails commercial loads (pf < 0.93) by 15 %
+  function loadFactor(state, L) { return state.load * (state.dr && L.pf < 0.93 ? 0.85 : 1); }
+  function summarize(model, state, topo, ublf, dpf) {
+    const kA = (pu, kv) => pu * SB * 1000 / (Math.sqrt(3) * kv);   // pu current -> amps
+    const kWph = SB * 1000 / 3;
+    const one = (pf) => {
+      const nph = pf.nph, out = { feeders: {}, vaults: {}, nodes: {}, subtx: {} };
+      let Pin = 0, Qin = 0, Pload = 0, Qload = 0, minV = Infinity, maxV = -Infinity, minNode = '', maxNode = '', maxTR = 0, maxTRid = '', maxVUF = 0, vufNode = '';
+      for (const k of [1, 2]) {
+        const r = pf.brRes['TR' + k];
+        const P = r ? r.S.reduce((a, s) => a + s[0], 0) * kWph * (3 / nph) : 0;
+        const Q = r ? r.S.reduce((a, s) => a + s[1], 0) * kWph * (3 / nph) : 0;
+        Pin += P; Qin += Q; out.subtx['TR' + k] = { P, Q, pct: Math.hypot(P, Q) / 30000 * 100 };
+      }
+      for (const f of model.feeders) {
+        const r = pf.brRes[f.segs[0]], closed = state.sw[f.breaker].closed;
+        const I = r && closed ? r.I.map(c => kA(mag(c), 13.8)) : [0, 0, 0].slice(0, nph);
+        const P = r && closed ? r.S.reduce((a, s) => a + s[0], 0) * kWph * (3 / nph) : 0;
+        const Q = r && closed ? r.S.reduce((a, s) => a + s[1], 0) * kWph * (3 / nph) : 0;
+        const head = pf.nodeV[model.nIndex.get(f.id + 'H')];
+        out.feeders[f.id] = { I, Imax: Math.max(...I), P, Q, energized: !!head && closed,
+          kV: head ? head.map(c => mag(c) * 13.8) : null,
+          npClosed: f.vaults.filter(v => state.sw['NP' + v.slice(1)].closed).length, npTotal: f.vaults.length };
+      }
+      for (const v of model.vaults) {
+        const r = pf.brRes[v.tr];
+        const I = r ? r.I.map(c => mag(c)) : null;   // pu on 1 MVA = 1.0 pu rated
+        const P = r ? r.S.reduce((a, s) => a + s[0], 0) * kWph * (3 / nph) : 0;
+        const pct = I ? Math.max(...I) / (model.NTX_KVA / 1000 / SB) * 100 : 0;
+        const Ia = I ? I.map(x => kA(x, 0.208)) : null;
+        out.vaults[v.id] = { pct, P, Ia, energized: !!r };
+        if (state.sw[v.np].closed && pct > maxTR) { maxTR = pct; maxTRid = v.id; }
+      }
+      let custOut = 0, kwOut = 0;
+      for (const L of model.loads) {
+        const vv = pf.nodeV[model.nIndex.get(L.node)];
+        if (!vv) { custOut += L.cust; kwOut += L.kw * loadFactor(state, L); out.nodes[L.node] = { V: null }; continue; }
+        const mags = vv.map(c => mag(c) * 120);
+        const fct = loadFactor(state, L), qph = nph === 3 ? L.q : [L.kw / 3 * Math.tan(Math.acos(L.pf))], pph = nph === 3 ? L.p : [L.kw / 3];
+        vv.forEach((c, p) => { const m = mag(c); Pload += pph[p] * fct * Math.pow(m, NP) * (3 / nph); Qload += qph[p] * fct * Math.pow(m, NQ) * (3 / nph); });
+        const lo = Math.min(...mags), hi = Math.max(...mags);
+        if (lo < minV) { minV = lo; minNode = L.node; }
+        if (hi > maxV) { maxV = hi; maxNode = L.node; }
+        const avg = mags.reduce((a, b) => a + b, 0) / mags.length, vuf = Math.max(...mags.map(m => Math.abs(m - avg))) / avg * 100;
+        if (vuf > maxVUF) { maxVUF = vuf; vufNode = L.node; }
+        out.nodes[L.node] = { V: mags, min: lo, vuf };
+      }
+      out.tot = { P: Pin, Q: Qin, pf: Pin > 0 ? Pin / Math.hypot(Pin, Qin) : 0, losses: Math.max(0, Pin - Pload), Pload, Qload,
+        minV: isFinite(minV) ? minV : 0, maxV: isFinite(maxV) ? maxV : 0, minNode, maxNode, maxTR, maxTRid, maxVUF, vufNode,
+        custOut, kwOut, iters: pf.iters, converged: pf.converged };
+      return out;
+    };
+    const U = one(ublf), D = one(dpf);
+    const out = model.feeders.filter(f => !state.sw[f.breaker].closed || !U.feeders[f.id].energized).length;
+    return { U, D, contingency: out };
+  }
+
+  G.GridEngine = { buildModel, createState, runStudy, loadFactor, constants: { SB, VSET, ZB, NP, NQ } };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+(function () {
+  'use strict';
+  const E = window.GridEngine, M = E.buildModel();
+  let S = E.createState(M), R = null;
+  let sel = null;          // {t:'sw'|'node'|'vault', id}
+  let armed = null;        // {id, act, until}
+  let busy = false;
+  const crews = {};        // feeder -> eta ms
+  const acked = new Set();
+  const log = [];
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const f0 = (x) => Math.round(x).toLocaleString('en-US');
+  const f1 = (x) => x.toFixed(1), f2 = (x) => x.toFixed(2);
+  const hhmmss = (d) => d.toTimeString().slice(0, 8);
+  const nodeOf = (id) => M.nodes[M.nIndex.get(id)];
+  const gridLabel = (id) => (M.gridNodes.find(g => g.id === id) || {}).label || id;
+  const vaultById = (id) => M.vaults.find(v => v.id === id);
+  const feederById = (id) => M.feeders.find(f => f.id === id);
+
+  function addLog(sev, msg) { log.unshift({ t: new Date(), sev, msg }); if (log.length > 250) log.pop(); }
+
+  let ptrDown = false, pendingRender = false;
+  function study(quiet) {
+    R = E.runStudy(M, S);
+    R.events.forEach(e => addLog(e.sev, e.msg));
+    if (quiet && ptrDown) { pendingRender = true; return; }
+    render();
+  }
+  document.addEventListener('pointerdown', () => { ptrDown = true; });
+  const up = () => { setTimeout(() => { ptrDown = false; if (pendingRender) { pendingRender = false; render(); } }, 0); };
+  document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
+
+  /* ------------------------------ alarms ------------------------------ */
+  function alarms() {
+    const U = R.summary.U, out = [];
+    for (const k of [1, 2]) {
+      const sw = S.sw['CB-TR' + k];
+      if (!sw.closed) out.push({ id: 'TR' + k, sev: 'crit', dev: 'CB-TR' + k, text: `TR${k} 13.8 kV main breaker open${sw.lockout ? ' — ' + sw.lockout : ''}` });
+    }
+    for (const k of [1, 2]) {
+      const n = R.ublf.nodeV[M.nIndex.get('BUS' + k)];
+      if (!n) out.push({ id: 'BUS' + k, sev: 'crit', dev: 'CB-BT', text: `13.8 kV bus section ${k} de-energized` });
+    }
+    for (const f of M.feeders) {
+      const sw = S.sw[f.breaker], fr = U.feeders[f.id];
+      if (S.faults[f.id]) out.push({ id: 'FLT' + f.id, sev: 'crit', dev: f.breaker, text: `${f.id} primary cable fault — lockout${crews[f.id] ? ', crew en route' : ''}` });
+      else if (!sw.closed) out.push({ id: 'OUT' + f.id, sev: 'high', dev: f.breaker, text: `${f.id} feeder out of service` });
+      else if (!fr.energized) out.push({ id: 'DEAD' + f.id, sev: 'high', dev: f.breaker, text: `${f.id} breaker closed but bus de-energized` });
+      if (fr.Imax > f.ratingA) out.push({ id: 'OVL' + f.id, sev: 'high', dev: f.breaker, text: `${f.id} head current ${f0(fr.Imax)} A exceeds ${f.ratingA} A rating` });
+    }
+    for (const v of M.vaults) {
+      const r = U.vaults[v.id];
+      if (r.pct >= 130) out.push({ id: 'TRL' + v.id, sev: 'crit', dev: 'V:' + v.id, text: `${v.tr} at ${f0(r.pct)}% — above emergency rating` });
+      else if (r.pct >= 100) out.push({ id: 'TRL' + v.id, sev: 'high', dev: 'V:' + v.id, text: `${v.tr} overloaded ${f0(r.pct)}%` });
+      if (S.sw[v.np].manual) out.push({ id: 'NPM' + v.id, sev: 'info', dev: 'V:' + v.id, text: `${v.np} blocked open by operator` });
+    }
+    for (const g of M.gridNodes) {
+      const r = U.nodes[g.id];
+      if (!r.V) { out.push({ id: 'DN' + g.id, sev: 'crit', dev: 'N:' + g.id, text: `${g.label} de-energized` }); continue; }
+      const ph = 'ABC'[r.V.indexOf(r.min)];
+      if (r.min < 110) out.push({ id: 'LV' + g.id, sev: 'crit', dev: 'N:' + g.id, text: `Low voltage ${f1(r.min)} V ph ${ph} · ${g.label}` });
+      else if (r.min < 114) out.push({ id: 'LV' + g.id, sev: 'high', dev: 'N:' + g.id, text: `Low voltage ${f1(r.min)} V ph ${ph} · ${g.label}` });
+      if (Math.max(...r.V) > 126) out.push({ id: 'HV' + g.id, sev: 'high', dev: 'N:' + g.id, text: `High voltage ${f1(Math.max(...r.V))} V · ${g.label}` });
+      if (r.vuf > 2) out.push({ id: 'VU' + g.id, sev: 'med', dev: 'N:' + g.id, text: `Voltage unbalance ${f2(r.vuf)}% · ${g.label}` });
+    }
+    for (const v of M.vaults) {
+      if (S.failed[v.id]) out.push({ id: 'FAIL' + v.id, sev: 'crit', dev: 'V:' + v.id, text: `${v.tr} FAILED — vault out of service` });
+      else if (G && (G.heat[v.id] || 0) > 0.4) out.push({ id: 'HOT' + v.id, sev: 'high', dev: 'V:' + v.id, text: `${v.tr} hot-spot temperature rising — ${f0(G.heat[v.id] / HEAT_FAIL * 100)}% to failure` });
+    }
+    if (S.vr) out.push({ id: 'VR', sev: 'info', dev: '', text: `Voltage reduction ${S.vr * 100}% in effect at the substation` });
+    if (S.dr) out.push({ id: 'DR', sev: 'info', dev: '', text: 'Demand response active — commercial load curtailed 15%' });
+    const c = R.summary.contingency;
+    if (c >= 2) out.push({ id: 'CONT' + c, sev: 'high', dev: '', text: `Network operating at N-${c} — beyond design contingency` });
+    const rank = { crit: 0, high: 1, med: 2, info: 3 };
+    return out.sort((a, b) => rank[a.sev] - rank[b.sev]);
+  }
+  const SEVC = { crit: 'var(--crit)', high: 'var(--warn)', med: 'var(--info)', info: 'var(--dim)' };
+  const SEVL = { crit: 'CRIT', high: 'HIGH', med: 'MED', info: 'INFO' };
+
+  /* ------------------------------ map ------------------------------ */
+  const AVX = [-230, 0, 260, 520, 780, 1040];
+  function vaultColor(pct, live) { return !live ? 'var(--dead)' : pct >= 130 ? 'var(--crit)' : pct >= 100 ? 'var(--warn)' : 'var(--lv)'; }
+  function voltColor(r) { if (!r || !r.V) return 'var(--dead)'; return r.min < 110 ? 'var(--crit)' : r.min < 114 || Math.max(...r.V) > 126 ? 'var(--warn)' : 'var(--lv)'; }
+  function pSum(br) { return br ? br.S.reduce((a, s) => a + s[0], 0) : 0; }
+
+  function feederRoute(f, k) {
+    const pts = [[-280, 252 + k * 15]], o = (k - 2.5) * 5;
+    let [px, py] = pts[0];
+    for (const vid of f.vaults) {
+      const v = vaultById(vid);
+      pts.push([v.x + o, py], [v.x + o, v.y], [v.x, v.y]); px = v.x; py = v.y;
+    }
+    return pts.map(p => p.join(',')).join(' ');
+  }
+
+  function renderMap() {
+    const U = R.summary.U, h = [];
+    h.push(`<rect x="-470" y="-110" width="1330" height="870" fill="var(--street)"/>`);
+    h.push(`<rect x="-470" y="-110" width="80" height="870" fill="var(--water)"/><line x1="-390" y1="-110" x2="-390" y2="760" stroke="var(--waterline)" stroke-width="2"/>`);
+    h.push(`<text x="-432" y="330" fill="var(--faint)" font-size="13" letter-spacing="6" transform="rotate(-90 -432 330)" text-anchor="middle">HUDSON RIVER</text>`);
+    for (let i = 0; i < AVX.length - 1; i++) for (let y = -80; y < 720; y += 80)
+      h.push(`<rect x="${AVX[i] + 12}" y="${y + 7}" width="${AVX[i + 1] - AVX[i] - 24}" height="66" fill="var(--block)"/>`);
+    for (let st = 53, y = -80; st >= 43; st--, y += 80)
+      h.push(`<text x="796" y="${y + 4}" fill="${st % 2 ? 'var(--faint)' : 'var(--dim)'}" font-size="12">W ${st}</text>`);
+    ['12 Av', '11 Av', '10 Av', '9 Av', '8 Av'].forEach((n, i) => h.push(`<text x="${AVX[i]}" y="-92" fill="var(--dim)" font-size="13" text-anchor="middle" letter-spacing="1">${n}</text>`));
+
+    // secondary mains
+    for (const b of M.mains) {
+      const a = nodeOf(b.f), c = nodeOf(b.t), r = R.ublf.brRes[b.id], live = !!r;
+      h.push(`<line x1="${a.x}" y1="${a.y}" x2="${c.x}" y2="${c.y}" stroke="${live ? 'var(--lv)' : 'var(--dead)'}" stroke-width="5" stroke-opacity="${live ? .55 : .8}" stroke-linecap="round"/>`);
+      if (live && Math.abs(pSum(r)) > 0.004)
+        h.push(`<line class="flow${pSum(r) < 0 ? ' rev' : ''}" x1="${a.x}" y1="${a.y}" x2="${c.x}" y2="${c.y}" stroke="var(--lv)" stroke-width="2.5" stroke-linecap="round"/>`);
+    }
+    // primary feeders
+    const selF = sel && sel.t === 'sw' && sel.id.startsWith('CB-MW') ? sel.id.slice(3) : (sel && sel.t === 'vault' ? vaultById(sel.id).feeder : null);
+    M.feeders.forEach((f, k) => {
+      const live = U.feeders[f.id].energized, pts = feederRoute(f, k), on = selF === f.id;
+      h.push(`<g class="sel-hit" data-sel="sw:${f.breaker}"><polyline points="${pts}" fill="none" stroke="transparent" stroke-width="14"/>`
+        + `<polyline points="${pts}" fill="none" stroke="${live ? 'var(--mv)' : 'var(--dead)'}" stroke-width="${on ? 3.4 : 1.8}" stroke-opacity="${on ? 1 : (selF ? .3 : .7)}" ${live ? '' : 'stroke-dasharray="7 6"'} stroke-linejoin="round"/>`
+        + (live ? `<polyline class="flow" points="${pts}" fill="none" stroke="var(--mv)" stroke-width="${on ? 3.4 : 1.8}" stroke-opacity="${selF && !on ? .3 : 1}"/>` : '')
+        + `</g>`);
+      h.push(`<text x="-271" y="${248 + k * 15}" fill="${live ? 'var(--mv)' : 'var(--faint)'}" font-size="10" ${on ? 'font-weight="600"' : ''}>${f.id}</text>`);
+    });
+    // substation
+    const sub = M.SUB;
+    h.push(`<g class="sel-hit" data-sel="sw:CB-BT"><rect x="${sub.x - 52}" y="${sub.y - 80}" width="104" height="160" fill="var(--panel2)" stroke="var(--rule2)"/>`
+      + `<text x="${sub.x}" y="${sub.y - 56}" fill="var(--text)" font-size="12" text-anchor="middle" font-weight="600">HUDSON</text>`
+      + `<text x="${sub.x}" y="${sub.y - 41}" fill="var(--dim)" font-size="10" text-anchor="middle">AREA SUB</text>`
+      + `<text x="${sub.x}" y="${sub.y + 66}" fill="var(--hv)" font-size="10" text-anchor="middle">138/13.8 kV</text></g>`);
+    for (const k of [1, 2]) {
+      const live = !!R.ublf.nodeV[M.nIndex.get('BUS' + k)], y = sub.y - 22 + (k - 1) * 46;
+      h.push(`<line x1="${sub.x - 38}" y1="${y}" x2="${sub.x + 38}" y2="${y}" stroke="${live ? 'var(--mv)' : 'var(--dead)'}" stroke-width="4"/>`
+        + `<text x="${sub.x}" y="${y - 6}" fill="var(--dim)" font-size="9" text-anchor="middle">BUS ${k}</text>`);
+    }
+    // vaults
+    for (const v of M.vaults) {
+      const n = nodeOf(v.node), r = U.vaults[v.id], np = S.sw[v.np], col = vaultColor(r.pct, r.energized), on = sel && sel.t === 'vault' && sel.id === v.id;
+      const mx = (n.x + v.x) / 2, my = (n.y + v.y) / 2;
+      h.push(`<g class="sel-hit" data-sel="vault:${v.id}">`
+        + `<line x1="${n.x}" y1="${n.y}" x2="${v.x}" y2="${v.y}" stroke="${np.closed ? 'var(--lv)' : 'var(--dead)'}" stroke-width="2"/>`
+        + `<rect x="${v.x - 12}" y="${v.y - 12}" width="24" height="24" fill="var(--panel)" stroke="${col}" stroke-width="${r.pct >= 100 ? 3 : 1.6}" ${r.pct >= 130 ? 'class="blink"' : ''}/>`
+        + (S.failed[v.id] ? `<rect x="${v.x - 12}" y="${v.y - 12}" width="24" height="24" fill="var(--crit)" fill-opacity=".25" stroke="var(--crit)" stroke-width="2"/><path d="M${v.x - 7} ${v.y - 7}L${v.x + 7} ${v.y + 7}M${v.x + 7} ${v.y - 7}L${v.x - 7} ${v.y + 7}" stroke="var(--crit)" stroke-width="2.5"/>`
+          : `<text x="${v.x}" y="${v.y + 4}" fill="${col}" font-size="9" text-anchor="middle">${r.energized ? f0(r.pct) : '—'}</text>`)
+        + (G && !S.failed[v.id] && (G.heat[v.id] || 0) > 0.02 ? `<rect x="${v.x - 12}" y="${v.y + 15}" width="24" height="4" fill="var(--rule2)"/><rect x="${v.x - 12}" y="${v.y + 15}" width="${Math.min(24, 24 * G.heat[v.id] / HEAT_FAIL)}" height="4" fill="var(--crit)"/>` : '')
+        + `<circle cx="${mx}" cy="${my}" r="13" fill="transparent"/>`
+        + `<rect x="${mx - 5}" y="${my - 5}" width="10" height="10" fill="${np.closed ? 'var(--closed)' : 'var(--open)'}" stroke="var(--bg)" stroke-width="1.5"/>`
+        + (np.manual ? `<text x="${mx + 9}" y="${my - 6}" fill="var(--warn)" font-size="9" font-weight="600">M</text>` : '')
+        + (on ? `<rect x="${v.x - 17}" y="${v.y - 17}" width="34" height="34" fill="none" stroke="var(--text)" stroke-dasharray="3 3"/>` : '')
+        + `</g>`);
+    }
+    // grid nodes
+    for (const g of M.gridNodes) {
+      const n = nodeOf(g.id), r = U.nodes[g.id], on = sel && sel.t === 'node' && sel.id === g.id;
+      h.push(`<g class="sel-hit" data-sel="node:${g.id}"><circle cx="${n.x}" cy="${n.y}" r="13" fill="transparent"/>`
+        + `<circle cx="${n.x}" cy="${n.y}" r="7" fill="${voltColor(r)}" stroke="var(--bg)" stroke-width="2"/>`
+        + (on ? `<circle cx="${n.x}" cy="${n.y}" r="12" fill="none" stroke="var(--text)" stroke-dasharray="3 3"/>` : '')
+        + (r.V ? `<text x="${n.x - 10}" y="${n.y - 11}" fill="var(--dim)" font-size="9" text-anchor="end">${f1(r.min)}V</text>` : '')
+        + `</g>`);
+    }
+    $('map').innerHTML = h.join('');
+    $('mapmeta').textContent = `${M.vaults.length} network transformers · ${M.gridNodes.length} grid nodes · ${M.feeders.length} feeders`;
+  }
+
+  /* ------------------------------ one-line ------------------------------ */
+  function breakerGlyph(id, x, y, label) {
+    const sw = S.sw[id], s = 18, on = sel && sel.t === 'sw' && sel.id === id;
+    return `<g class="sel-hit" data-sel="sw:${id}" role="button" aria-label="${esc(label)}">`
+      + `<rect x="${x - 16}" y="${y - 16}" width="32" height="32" fill="transparent"/>`
+      + `<rect x="${x - s / 2}" y="${y - s / 2}" width="${s}" height="${s}" fill="${sw.closed ? 'var(--closed)' : 'var(--open)'}" stroke="${sw.lockout ? 'var(--crit)' : 'var(--bg)'}" stroke-width="${sw.lockout ? 2.5 : 1.5}" ${sw.lockout ? 'class="blink"' : ''}/>`
+      + (on ? `<rect x="${x - 14}" y="${y - 14}" width="28" height="28" fill="none" stroke="var(--text)" stroke-dasharray="3 3"/>` : '')
+      + (sw.tag ? `<rect x="${x + 8}" y="${y - 18}" width="11" height="11" fill="var(--warn)"/><text x="${x + 13.5}" y="${y - 9.5}" fill="#10151b" font-size="8" font-weight="700" text-anchor="middle">T</text>` : '')
+      + `</g>`;
+  }
+  function renderOneLine() {
+    const U = R.summary.U, h = [], live = (id) => !!R.ublf.nodeV[M.nIndex.get(id)];
+    const col = (on, c) => on ? c : 'var(--dead)';
+    for (const k of [1, 2]) {
+      const x = k === 1 ? 90 : 270, trL = live('TR' + k + 'L'), bus = live('BUS' + k), t = U.subtx['TR' + k];
+      h.push(`<text x="${x}" y="14" fill="var(--hv)" font-size="10" text-anchor="middle">138 kV LINE ${k}</text>`);
+      h.push(`<line x1="${x}" y1="20" x2="${x}" y2="44" stroke="var(--hv)" stroke-width="2"/>`);
+      h.push(`<circle cx="${x}" cy="52" r="10" fill="none" stroke="var(--hv)" stroke-width="2"/><circle cx="${x}" cy="66" r="10" fill="none" stroke="${col(trL, 'var(--mv)')}" stroke-width="2"/>`);
+      h.push(`<text x="${x + 18}" y="56" fill="var(--text)" font-size="11">TR${k}</text><text x="${x + 18}" y="69" fill="var(--dim)" font-size="9">${f1(Math.hypot(t.P, t.Q) / 1000)} MVA</text>`);
+      h.push(`<line x1="${x}" y1="76" x2="${x}" y2="${140}" stroke="${col(trL, 'var(--mv)')}" stroke-width="2"/>`);
+      h.push(breakerGlyph('CB-TR' + k, x, 106, `TR${k} main breaker`));
+      const x1 = k === 1 ? 18 : 198, x2 = k === 1 ? 162 : 342;
+      h.push(`<line x1="${x1}" y1="140" x2="${x2}" y2="140" stroke="${col(bus, 'var(--mv)')}" stroke-width="5"/>`);
+      h.push(`<text x="${x1}" y="133" fill="var(--dim)" font-size="9">BUS ${k}</text>`);
+    }
+    h.push(`<line x1="162" y1="140" x2="198" y2="140" stroke="${S.sw['CB-BT'].closed ? 'var(--mv)' : 'var(--rule2)'}" stroke-width="2"/>`);
+    h.push(breakerGlyph('CB-BT', 180, 140, 'Bus tie breaker'));
+    h.push(`<text x="180" y="166" fill="var(--dim)" font-size="9" text-anchor="middle">TIE</text>`);
+    const xs = { MW01: 40, MW03: 90, MW05: 140, MW02: 220, MW04: 270, MW06: 320 };
+    for (const f of M.feeders) {
+      const x = xs[f.id], fr = U.feeders[f.id], on = fr.energized;
+      h.push(`<line x1="${x}" y1="140" x2="${x}" y2="232" stroke="${col(on || live('BUS' + f.bus), 'var(--mv)')}" stroke-width="2"/>`);
+      h.push(`<line x1="${x}" y1="196" x2="${x}" y2="232" stroke="${col(on, 'var(--mv)')}" stroke-width="2"/><path d="M${x - 5} 226 L${x} 236 L${x + 5} 226" fill="none" stroke="${col(on, 'var(--mv)')}" stroke-width="2"/>`);
+      h.push(breakerGlyph(f.breaker, x, 182, `Feeder ${f.id} breaker`));
+      h.push(`<text x="${x}" y="252" fill="${on ? 'var(--text)' : 'var(--faint)'}" font-size="11" text-anchor="middle" font-weight="600">${f.id}</text>`);
+      h.push(`<text x="${x}" y="268" fill="${fr.Imax > f.ratingA ? 'var(--crit)' : 'var(--mv)'}" font-size="10" text-anchor="middle">${on ? f0(fr.Imax) + ' A' : '—'}</text>`);
+      h.push(`<text x="${x}" y="283" fill="var(--dim)" font-size="9" text-anchor="middle">NP ${fr.npClosed}/${fr.npTotal}</text>`);
+      if (S.faults[f.id]) h.push(`<text x="${x}" y="297" fill="var(--crit)" font-size="9" text-anchor="middle" class="blink">FAULT</text>`);
+    }
+    $('oneline').innerHTML = h.join('');
+  }
+
+  /* ------------------------------ device panel ------------------------------ */
+  function phaseRows(rows) {
+    return `<div class="phases"><span class="h"></span><span class="h">A</span><span class="h">B</span><span class="h">C</span>`
+      + rows.map(r => `<span class="l">${r[0]}</span>` + r[1].map(v => `<span>${v}</span>`).join('')).join('') + `</div>`;
+  }
+  function stateBlock(sw) {
+    return `<div class="state"><span class="sq" style="background:${sw.closed ? 'var(--closed)' : 'var(--open)'}"></span>${sw.closed ? 'CLOSED' : 'OPEN'}`
+      + (sw.manual ? ' · BLOCKED' : '') + (sw.tag ? ' <span class="tagbadge">HOLD TAG</span>' : '') + `</div>`;
+  }
+  function controlBlock(id) {
+    const sw = S.sw[id], def = M.swById.get(id);
+    if (armed && armed.id === id) {
+      const left = Math.max(0, Math.ceil((armed.until - Date.now()) / 1000));
+      return `<div class="sbo"><div><b>SELECTED: ${armed.label}</b> — confirm within <span class="num" id="sbo-left">${left}</span> s</div>`
+        + `<div class="btnrow"><button class="btn primary" data-act="exec" ${busy ? 'disabled' : ''}>${busy ? 'Operating…' : 'Execute'}</button><button class="btn" data-act="cancel">Cancel</button></div></div>`;
+    }
+    const b = [];
+    if (def.kind === 'np') {
+      if (sw.manual) b.push(`<button class="btn go" data-act="sel" data-op="auto" ${sw.tag ? 'disabled' : ''}>Return to auto</button>`);
+      else b.push(`<button class="btn danger" data-act="sel" data-op="block" ${sw.tag ? 'disabled' : ''}>Open &amp; block</button>`);
+    } else {
+      b.push(sw.closed ? `<button class="btn go" data-act="sel" data-op="open" ${sw.tag ? 'disabled' : ''}>Open</button>`
+        : `<button class="btn danger" data-act="sel" data-op="close" ${sw.tag ? 'disabled' : ''}>Close</button>`);
+    }
+    b.push(`<button class="btn" data-act="tag">${sw.tag ? 'Remove hold tag' : 'Place hold tag'}</button>`);
+    return `<div class="btnrow">${b.join('')}</div>` + (sw.tag ? `<p class="note">Hold tag in place. Controls are blocked until the tag is removed.</p>` : '');
+  }
+  function npChip(v) {
+    const sw = S.sw[v.np], r = R.summary.U.vaults[v.id], on = sel && sel.t === 'vault' && sel.id === v.id;
+    const st = S.failed[v.id] ? 'FAILED' : sw.manual ? 'BLOCKED' : sw.closed ? 'CLOSED' : 'OPEN';
+    const pc = r.pct >= 130 ? 'c-crit' : r.pct >= 100 ? 'c-warn' : 'c-dim';
+    return `<button class="npchip${on ? ' on' : ''}" data-sel="vault:${v.id}" title="${esc(v.label)}">`
+      + `<span class="sq" style="background:${sw.closed ? 'var(--closed)' : 'var(--open)'}"></span>`
+      + `<span class="npid">${v.np.slice(2)}</span><span class="npst ${st === 'CLOSED' ? '' : st === 'OPEN' ? 'c-warn' : 'c-crit'}">${st}</span>`
+      + `<span class="num ${pc}">${r.energized ? f0(r.pct) + '%' : '—'}</span>${sw.tag ? '<span class="tagbadge">T</span>' : ''}</button>`;
+  }
+  function groupBlock(f) {
+    const id = 'GRP:' + f.id, nps = f.vaults.map(vaultById);
+    let h = `<div class="grp"><div class="grp-h">Network protectors on ${f.id}</div><div class="npchips">${nps.map(npChip).join('')}</div>`;
+    if (armed && armed.id === id) {
+      const left = Math.max(0, Math.ceil((armed.until - Date.now()) / 1000));
+      h += `<div class="sbo"><div><b>SELECTED: ${armed.label}</b> — confirm within <span class="num" id="sbo-left">${left}</span> s</div>`
+        + `<div class="btnrow"><button class="btn primary" data-act="exec" ${busy ? 'disabled' : ''}>${busy ? 'Operating…' : 'Execute'}</button><button class="btn" data-act="cancel">Cancel</button></div></div>`;
+    } else {
+      const anyAuto = nps.some(v => !S.sw[v.np].manual), anyMan = nps.some(v => S.sw[v.np].manual);
+      h += `<div class="btnrow"><button class="btn danger" data-act="sel" data-grp="${f.id}" data-op="block" ${anyAuto ? '' : 'disabled'}>Open &amp; block all ${nps.length}</button>`
+        + `<button class="btn go" data-act="sel" data-grp="${f.id}" data-op="auto" ${anyMan ? '' : 'disabled'}>Return all to auto</button></div>`;
+    }
+    return h + `</div>`;
+  }
+  function renderNPBoard() {
+    $('npboard').innerHTML = M.feeders.map(f => `<div class="nprow"><span class="npf ${R.summary.U.feeders[f.id].energized ? '' : 'c-dim'}" data-sel="sw:${f.breaker}">${f.id}</span>`
+      + `<div class="npchips">${f.vaults.map(vid => npChip(vaultById(vid))).join('')}</div></div>`).join('');
+  }
+  function crewBlock(key, what) {
+    if (!S.faults[key]) return '';
+    if (crews[key] !== undefined) return `<p class="note c-warn">Repair crew on site — ${what} back in service in about <span class="num">${Math.max(1, Math.ceil(crews[key]))}</span> min.</p>`;
+    return `<div class="btnrow"><button class="btn primary" data-act="crew" data-key="${key}">Dispatch repair crew</button></div><p class="note">Closing into a faulted ${what} trips the breaker again.</p>`;
+  }
+  function renderDev() {
+    const el = $('dev'), U = R.summary.U, D = R.summary.D;
+    if (!sel) {
+      el.innerHTML = `<div class="brief"><h3>Shift briefing</h3><p class="note" style="margin:4px 0 10px">You are the distribution operator for a Manhattan-style secondary network: six 13.8 kV feeders supply ${M.vaults.length} network transformers that all tie into one meshed 208/120 V street grid.</p><ol>
+        <li><b>Click any breaker</b> on the one-line or any feeder, vault or grid node on the map.</li>
+        <li><b>Operate</b> with select-before-operate: choose the action, then Execute within 15 s.</li>
+        <li>Open a feeder and watch its <b>network protectors trip on reverse power</b> while the other feeders pick up the load.</li>
+        <li>Find network protectors fastest on the <b>protector board</b>, or click a feeder breaker to see and operate its three protectors together.</li>
+        <li>Compare <b>UBLF</b> (three-phase, unbalanced) with <b>DPF</b> (balanced) in the study panel below.</li>
+        <li>Inject an event and restore the network without overloading the vaults, or play a <b>scenario</b> for score.</li></ol></div>`;
+      return;
+    }
+    if (sel.t === 'sw') {
+      const def = M.swById.get(sel.id), sw = S.sw[sel.id], h = [];
+      h.push(`<div><h3>${esc(sel.id)}</h3><div class="type">${esc(def.label)}</div></div>`, stateBlock(sw));
+      if (sw.lockout) h.push(`<p class="note c-crit">Lockout: ${esc(sw.lockout)}</p>`);
+      if (def.feeder) {
+        const f = feederById(def.feeder), u = U.feeders[f.id], d = D.feeders[f.id];
+        h.push(phaseRows([['UBLF A', u.I.map(f0)], ['DPF A', [f0(d.I[0]), f0(d.I[0]), f0(d.I[0])]], ['kV', u.kV ? u.kV.map(f2) : ['—', '—', '—']]]));
+        h.push(`<dl class="kv"><dt>Real power</dt><dd>${f2(u.P / 1000)} MW</dd><dt>Reactive power</dt><dd>${f2(u.Q / 1000)} MVAR</dd>`
+          + `<dt>Rating</dt><dd>${f.ratingA} A</dd><dt>Route length</dt><dd>${f1(f.lenM / 1000)} km</dd>`
+          + `<dt>Bus section</dt><dd>${f.bus}</dd><dt>Network protectors</dt><dd>${u.npClosed} of ${u.npTotal} closed</dd>`
+          + `<dt>Vaults</dt><dd>${f.vaults.map(v => v.slice(1)).join(', ')}</dd></dl>`);
+        h.push(crewBlock(f.id, 'cable'));
+        h.push(controlBlock(sel.id));
+        h.push(groupBlock(f));
+        el.innerHTML = h.join('');
+        return;
+      } else if (def.kind === 'cb') {
+        const t = U.subtx[def.branch];
+        h.push(`<dl class="kv"><dt>Transformer flow</dt><dd>${f2(t.P / 1000)} MW · ${f2(t.Q / 1000)} MVAR</dd><dt>TR loading</dt><dd>${f1(t.pct)} % of 30 MVA</dd></dl>`);
+        h.push(crewBlock(def.branch, 'transformer'));
+      } else if (def.kind === 'tie') {
+        h.push(`<p class="note">Normally open. Close it to carry both bus sections from one transformer after a transformer outage.</p>`);
+      }
+      h.push(controlBlock(sel.id));
+      el.innerHTML = h.join('');
+    } else if (sel.t === 'vault') {
+      const v = vaultById(sel.id), u = U.vaults[v.id], d = D.vaults[v.id], sw = S.sw[v.np], h = [];
+      h.push(`<div><h3>${esc(v.np)}</h3><div class="type">${esc(v.label)} · ${v.tr} 1000 kVA 13.8 kV–208Y/120 V · fed by ${v.feeder}</div></div>`, stateBlock(sw));
+      h.push(phaseRows([['UBLF A', u.Ia ? u.Ia.map(f0) : ['—', '—', '—']], ['DPF A', d.Ia ? [f0(d.Ia[0]), f0(d.Ia[0]), f0(d.Ia[0])] : ['—', '—', '—']]]));
+      h.push(`<dl class="kv"><dt>Loading UBLF</dt><dd class="${u.pct >= 130 ? 'c-crit' : u.pct >= 100 ? 'c-warn' : ''}">${f1(u.pct)} %</dd><dt>Loading DPF</dt><dd>${f1(d.pct)} %</dd>`
+        + `<dt>Real power</dt><dd>${f0(u.P)} kW</dd><dt>Protector mode</dt><dd>${sw.manual ? 'Blocked open' : 'Automatic'}</dd></dl>`);
+      h.push(`<p class="note">The protector trips on reverse power when ${v.feeder} is lost and recloses automatically when the feeder is restored.</p>`);
+      h.push(controlBlock(v.np));
+      el.innerHTML = h.join('');
+    } else if (sel.t === 'node') {
+      const g = M.gridNodes.find(x => x.id === sel.id), u = U.nodes[g.id], d = D.nodes[g.id], L = M.loads.find(l => l.node === g.id);
+      el.innerHTML = `<div><h3>${esc(g.label)}</h3><div class="type">Secondary grid node · ${esc(L.desc)}</div></div>`
+        + phaseRows([['UBLF V', u.V ? u.V.map(f1) : ['—', '—', '—']], ['DPF V', d.V ? [f1(d.V[0]), f1(d.V[0]), f1(d.V[0])] : ['—', '—', '—']],
+          ['Load kW', L.p.map(p => f0(p * S.load))]])
+        + `<dl class="kv"><dt>Total load</dt><dd>${f0(L.kw * S.load)} kW at ${f2(L.pf)} pf</dd><dt>Customers</dt><dd>${f0(L.cust)}</dd>`
+        + `<dt>Voltage unbalance</dt><dd>${u.V ? f2(u.vuf) + ' %' : '—'}</dd><dt>ANSI Range A</dt><dd>114–126 V</dd></dl>`
+        + `<p class="note">Grid nodes are not switchable. Voltage here depends on how many nearby network transformers are in service.</p>`;
+    }
+  }
+
+  /* ------------------------------ tables ------------------------------ */
+  function renderStudy() {
+    const U = R.summary.U.tot, D = R.summary.D.tot;
+    const vcls = (v) => v < 110 ? 'c-crit' : v < 114 || v > 126 ? 'c-warn' : '';
+    const tcls = (p) => p >= 130 ? 'c-crit' : p >= 100 ? 'c-warn' : '';
+    const row = (lab, u, d, ucls = '', dcls = '', loc = '') =>
+      `<tr><td class="lab">${lab}${loc ? `<span class="loc">${loc}</span>` : ''}</td><td class="${ucls}">${u}</td><td class="${dcls}">${d}</td></tr>`;
+    $('study').innerHTML = `<thead><tr><th>Quantity</th><th>UBLF · 3-phase</th><th>DPF · balanced</th></tr></thead><tbody>`
+      + row('Network demand', `${f2(U.P / 1000)} MW`, `${f2(D.P / 1000)} MW`)
+      + row('Reactive demand', `${f2(U.Q / 1000)} MVAR`, `${f2(D.Q / 1000)} MVAR`)
+      + row('Power factor', f2(U.pf), f2(D.pf))
+      + row('Losses', `${f0(U.losses)} kW`, `${f0(D.losses)} kW`)
+      + row('Lowest secondary voltage', `${f1(U.minV)} V`, `${f1(D.minV)} V`, vcls(U.minV), vcls(D.minV), U.minNode ? gridLabel(U.minNode) : '')
+      + row('Highest secondary voltage', `${f1(U.maxV)} V`, `${f1(D.maxV)} V`, vcls(U.maxV), vcls(D.maxV))
+      + row('Heaviest network transformer', `${f1(U.maxTR)} %`, `${f1(D.maxTR)} %`, tcls(U.maxTR), tcls(D.maxTR), U.maxTRid ? 'Vault ' + U.maxTRid.slice(1) : '')
+      + row('Worst voltage unbalance', `${f2(U.maxVUF)} %`, '— by definition', U.maxVUF > 2 ? 'c-warn' : '', 'c-dim', U.vufNode ? gridLabel(U.vufNode) : '')
+      + row('Customers out', f0(U.custOut), f0(D.custOut), U.custOut ? 'c-crit' : '', D.custOut ? 'c-crit' : '')
+      + row('Solver iterations', `${U.iters}${U.converged ? '' : ' ✕'}`, `${D.iters}${D.converged ? '' : ' ✕'}`)
+      + `</tbody>`;
+    $('pfmeta').textContent = `solved ${hhmmss(new Date())} · load ${Math.round(S.load * 100)}%`;
+    const FU = R.summary.U.feeders, FD = R.summary.D.feeders;
+    $('feeders').innerHTML = `<thead><tr><th>Feeder</th><th>Status</th><th>Ia</th><th>Ib</th><th>Ic</th><th>DPF I</th><th>MW</th><th>NP</th></tr></thead><tbody>`
+      + M.feeders.map(f => {
+        const u = FU[f.id], d = FD[f.id], sw = S.sw[f.breaker];
+        const st = S.faults[f.id] ? `<span class="pill c-crit">LOCKOUT</span>` : !sw.closed ? `<span class="pill c-warn">OPEN</span>` : u.energized ? `<span class="pill c-ok">IN SVC</span>` : `<span class="pill c-crit">DEAD BUS</span>`;
+        const a = (x) => u.energized ? `<span class="${x > f.ratingA ? 'c-crit' : ''}">${f0(x)}</span>` : '<span class="c-dim">—</span>';
+        return `<tr class="clickable" data-sel="sw:${f.breaker}"><td>${f.id} <span class="c-dim">B${f.bus}</span></td><td>${st}</td><td>${a(u.I[0])}</td><td>${a(u.I[1])}</td><td>${a(u.I[2])}</td>`
+          + `<td>${u.energized ? f0(d.I[0]) : '<span class="c-dim">—</span>'}</td><td>${u.energized ? f2(u.P / 1000) : '<span class="c-dim">—</span>'}</td><td>${u.npClosed}/${u.npTotal}</td></tr>`;
+      }).join('') + `</tbody>`;
+  }
+
+  function renderConsole() {
+    const A = alarms();
+    const live = new Set(A.map(a => a.id));
+    for (const id of [...acked]) if (!live.has(id)) acked.delete(id);
+    $('alarms').innerHTML = A.length ? A.map(a => `<li class="${acked.has(a.id) ? '' : 'unack'}" ${a.dev ? `data-sel="${a.dev.startsWith('V:') ? 'vault:' + a.dev.slice(2) : a.dev.startsWith('N:') ? 'node:' + a.dev.slice(2) : 'sw:' + a.dev}" style="cursor:pointer"` : ''}>`
+      + `<span class="bar ${acked.has(a.id) ? '' : 'blink'}" style="background:${SEVC[a.sev]}"></span>`
+      + `<span class="sev" style="color:${SEVC[a.sev]}">${SEVL[a.sev]}</span><span class="txt">${esc(a.text)}</span>`
+      + (acked.has(a.id) ? '<span class="c-dim" style="font-size:10px">ACK</span>' : `<button class="btn ack" data-ack="${esc(a.id)}">Ack</button>`) + `</li>`).join('')
+      : `<li class="empty">No active alarms. Network normal.</li>`;
+    $('events').innerHTML = log.length ? log.map(e => `<li><time>${hhmmss(e.t)}</time><span style="color:${SEVC[e.sev] || 'var(--text)'}">${esc(e.msg)}</span></li>`).join('')
+      : `<li class="empty">No events yet.</li>`;
+    // chips
+    const U = R.summary.U.tot, c = R.summary.contingency;
+    const crit = A.filter(a => a.sev === 'crit').length, high = A.filter(a => a.sev === 'high').length, un = A.filter(a => !acked.has(a.id) && a.sev !== 'info').length;
+    $('chips').innerHTML = [
+      ['Contingency', `N-${c}`, c === 0 ? 'ok' : c === 1 ? 'warn' : 'crit'],
+      ['Demand', `${f2(U.P / 1000)} MW`, ''],
+      ['Min volts', `${f1(U.minV)} V`, U.minV < 110 ? 'crit' : U.minV < 114 ? 'warn' : 'ok'],
+      ['Alarms', `${A.filter(a => a.sev !== 'info').length}${un ? ' · ' + un + ' new' : ''}`, crit ? 'crit' : high ? 'warn' : 'ok'],
+      ['Time', `<span id="clock">${hhmmss(new Date())}</span>`, '']
+    ].map(([k, v, cl]) => `<div class="chip ${cl}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+  }
+
+  function render() {
+    renderMission(); renderSys();
+    const inGame = !!G;
+    $('load').disabled = inGame; $('evt').disabled = inGame; $('inject').disabled = inGame; $('reset').textContent = inGame ? 'Abort' : 'Reset';
+    renderMap(); renderNPBoard(); renderOneLine(); renderDev(); renderStudy(); renderConsole(); $('loadv').textContent = Math.round(S.load * 100) + '%'; $('load').value = Math.round(S.load * 100); }
+
+  /* ============================== Level 2: scenarios ============================== */
+  const SCN = [
+    { id: 'lockout', title: 'Afternoon Lockout', diff: 1, limit: 45, clock: [14, 10],
+      brief: 'A July afternoon near summer peak. Feeder MW03 locks out on a cable fault, its three network protectors trip, and the other five feeders pick up the load. Several vaults are now above their emergency rating.',
+      tip: 'Demand response cuts commercial load. Voltage reduction trims demand but barely lowers vault current.',
+      setup(S) { S.load = 1.05; S.faults.MW03 = true; }, load: () => 1.05,
+      objectives: [
+        { text: 'Dispatch a repair crew to MW03', check: () => !!crews.MW03 || !S.faults.MW03 },
+        { text: 'Bring every vault below its 130 % emergency rating', check: (c) => c.U.tot.maxTR < 130 },
+        { text: 'Restore MW03 and confirm its three protectors reclose', check: (c) => !S.faults.MW03 && c.U.feeders.MW03.energized && c.U.feeders.MW03.npClosed === 3 },
+        { text: 'Return demand response and voltage to normal', after: 2, check: () => !S.dr && !S.vr }
+      ] },
+    { id: 'transformer', title: 'Lost Transformer', diff: 2, limit: 30, clock: [17, 40],
+      brief: 'Evening rush. Substation transformer TR1 trips on its differential relay and bus section 1 goes dark. Feeders MW01, MW03 and MW05 are dead, nine protectors have opened, and the network is running on half its supply. Vault hot-spot temperatures are climbing.',
+      tip: 'TR1 is faulted. Closing its breaker will trip it again. Supply bus 1 another way, then make TR1 safe.',
+      setup(S) { S.load = 0.8; S.faults.TR1 = true; }, load: () => 0.8,
+      objectives: [
+        { text: 'Re-energize 13.8 kV bus section 1', check: () => !!R.ublf.nodeV[M.nIndex.get('BUS1')] },
+        { text: 'Place a hold tag on the TR1 main breaker', check: () => S.sw['CB-TR1'].tag },
+        { text: 'All 18 network protectors back in service', after: 0, check: () => M.vaults.every(v => S.sw[v.np].closed) },
+        { text: 'No vault failures', hold: true, check: () => !G.fails }
+      ] },
+    { id: 'outage', title: 'Planned Cable Splice', diff: 2, limit: 50, clock: [9, 0],
+      brief: 'A splice crew needs feeder MW04 de-energized for scheduled cable work. Take the feeder out of service in the correct order, issue the clearance, then return it to normal once the crew releases it.',
+      tip: 'Steps unlock in order. Removing a tag while the crew is working is a serious violation.',
+      setup(S) { S.load = 0.7; }, load: () => 0.7,
+      objectives: [
+        { text: 'Open feeder breaker CB-MW04', check: () => !S.sw['CB-MW04'].closed },
+        { text: 'Open and block the three MW04 network protectors', after: 0, check: () => feederById('MW04').vaults.every(v => S.sw['NP' + v.slice(1)].manual) },
+        { text: 'Place a hold tag on CB-MW04 to issue the clearance', after: 1, check: () => S.sw['CB-MW04'].tag && !S.sw['CB-MW04'].closed,
+          onDone() { G.clear = G.t + 12; addLog('info', 'Clearance issued on MW04 — crew begins splice work (about 12 min)'); } },
+        { text: 'Wait for the crew to finish and release the clearance', after: 2, check: () => G.clear !== null && G.t >= G.clear,
+          onDone() { addLog('info', 'Crew reports MW04 splice complete — clearance released'); } },
+        { text: 'Remove the hold tag from CB-MW04', after: 3, check: () => !S.sw['CB-MW04'].tag },
+        { text: 'Close CB-MW04', after: 4, check: () => S.sw['CB-MW04'].closed },
+        { text: 'Return the MW04 protectors to automatic', after: 5, check: (c) => c.U.feeders.MW04.npClosed === 3 && feederById('MW04').vaults.every(v => !S.sw['NP' + v.slice(1)].manual) }
+      ],
+      onTag(id, on) { if (id === 'CB-MW04' && !on && G.clear !== null && G.t < G.clear) violation('Hold tag removed from CB-MW04 while the crew is still working'); },
+      onOp(id, op) {
+        const mw4 = feederById('MW04').vaults.map(v => 'NP' + v.slice(1));
+        if (op === 'auto' && mw4.includes(id) && G.clear !== null && G.t < G.clear) violation(`${id} returned to automatic while the crew is still working`);
+      } },
+    { id: 'heat', title: 'Heat Storm', diff: 3, limit: 50, clock: [12, 30],
+      brief: 'A record heat day. Load climbs from 95 % to 118 % of summer peak over the next half hour, and the network is already stretched. Hold it together through whatever the afternoon brings.',
+      tip: 'Watch vault hot-spot bars on the map. Deep voltage reduction will pull customers below 110 V.',
+      setup(S) { S.load = 0.95; },
+      load: (t) => 0.95 + 0.23 * Math.min(1, t / 30),
+      timeline: [{ at: 8, fn(S) { S.faults.MW03 = true; addLog('crit', 'Relay: phase-to-ground fault on MW03 primary cable'); } }],
+      objectives: [
+        { text: 'Dispatch a repair crew to the faulted feeder', check: (c) => c.t >= 8 && (!!crews.MW03 || !S.faults.MW03) },
+        { text: 'Restore MW03 with all three protectors closed', after: 0, check: (c) => !S.faults.MW03 && c.U.feeders.MW03.energized && c.U.feeders.MW03.npClosed === 3 },
+        { text: 'Keep every secondary node at or above 110 V', hold: true, check: (c) => c.U.tot.minV >= 110 || c.U.tot.custOut > 0 },
+        { text: 'No vault failures', hold: true, check: () => !G.fails }
+      ] }
+  ];
+  const DIFF = ['', 'Introductory', 'Intermediate', 'Advanced'];
+  const HEAT_FAIL = 2.5;
+  let G = null;
+  const best = (id) => { try { return +localStorage.getItem('gridgame.best.' + id) || 0; } catch (e) { return 0; } };
+  const saveBest = (id, v) => { try { if (v > best(id)) localStorage.setItem('gridgame.best.' + id, String(v)); } catch (e) { /* storage unavailable */ } };
+  function violation(msg) { if (!G) return; G.viol++; addLog('crit', 'Procedure violation: ' + msg); }
+
+  function startScenario(id) {
+    const sc = SCN.find(x => x.id === id);
+    S = E.createState(M); sel = null; armed = null; acked.clear(); for (const k in crews) delete crews[k];
+    G = { sc, t: 0, speed: 1, paused: false, heat: {}, pen: { cmi: 0, o100: 0, o130: 0, v114: 0, v110: 0, vr: 0, dr: 0 },
+      fails: 0, viol: 0, clear: null, fired: new Set(), ended: null, obj: sc.objectives.map(o => ({ ...o, st: o.hold ? 'hold' : 'todo' })) };
+    sc.setup(S);
+    addLog('info', `Scenario started: ${sc.title}`);
+    study(); evalObjectives(); render();
+  }
+  function endScenario(ok, why) {
+    G.ended = { ok, why }; missionMin = false;
+    if (ok) G.obj.forEach(o => { if (o.st === 'hold') o.st = 'done'; });
+    const sc = scoreOf();
+    addLog(ok ? 'info' : 'crit', `Scenario ${ok ? 'complete' : 'ended'}: ${why} · score ${sc.total} (${sc.grade})`);
+    if (ok) saveBest(G.sc.id, sc.total);
+  }
+  function exitScenario() { G = null; S = E.createState(M); sel = null; armed = null; for (const k in crews) delete crews[k]; addLog('info', 'Returned to sandbox — normal configuration'); study(); }
+
+  function evalObjectives() {
+    if (!G || G.ended) return;
+    const c = { U: R.summary.U, t: G.t };
+    G.obj.forEach((o, i) => {
+      if (o.st === 'hold') { if (!o.check(c)) { o.st = 'failed'; addLog('crit', `Objective failed: ${o.text}`); } return; }
+      if (o.st !== 'todo') return;
+      if (o.after !== undefined && G.obj[o.after].st !== 'done') return;
+      if (o.check(c)) { o.st = 'done'; addLog('info', `Objective complete: ${o.text}`); if (o.onDone) o.onDone(); }
+    });
+    if (G.obj.every(o => o.st !== 'todo')) {
+      if (G.obj.some(o => o.st === 'failed')) endScenario(true, 'objectives met with a broken constraint');
+      else endScenario(true, 'all objectives met');
+    }
+    renderMission();
+  }
+  function scoreOf() {
+    const p = G.pen, items = [
+      ['Customer-minutes interrupted', p.cmi * 0.02], ['Vault loading above 100 %', p.o100 * 0.5], ['Vault loading above 130 %', p.o130 * 3],
+      ['Secondary voltage below 114 V', p.v114 * 1], ['Secondary voltage below 110 V', p.v110 * 4],
+      ['Voltage reduction in effect', p.vr], ['Demand response in effect', p.dr * 1.5],
+      ['Vault failures', G.fails * 250], ['Procedure violations', G.viol * 150]];
+    const pen = items.reduce((a, b) => a + b[1], 0);
+    const ok = G.ended && G.ended.ok, bonus = ok ? Math.round((G.sc.limit - G.t) * 2) : 0;
+    const total = Math.max(0, Math.round(1000 - pen + bonus));
+    let grade = !G.ended ? '' : !ok ? 'F' : total >= 950 ? 'A' : total >= 850 ? 'B' : total >= 700 ? 'C' : 'D';
+    if (ok && (G.fails || G.obj.some(o => o.st === 'failed')) && (grade === 'A' || grade === 'B')) grade = 'C';
+    return { items, pen, bonus, total, grade };
+  }
+  function gameTick() {
+    if (!G || G.ended || G.paused) return;
+    const dt = G.speed / 3; G.t += dt;
+    (G.sc.timeline || []).forEach((e, i) => { if (!G.fired.has(i) && G.t >= e.at) { G.fired.add(i); e.fn(S); } });
+    S.load = G.sc.load(G.t);
+    study(true);
+    const U = R.summary.U, p = G.pen;
+    p.cmi += U.tot.custOut * dt;
+    let newFail = false;
+    for (const v of M.vaults) {
+      const pct = U.vaults[v.id].pct;
+      if (pct > 100) p.o100 += dt; if (pct > 130) p.o130 += dt;
+      const h = G.heat[v.id] || 0;
+      G.heat[v.id] = pct > 130 ? h + ((pct - 130) / 50) ** 2 * dt : Math.max(0, h - 0.04 * dt);
+      if (!S.failed[v.id] && G.heat[v.id] >= HEAT_FAIL) {
+        S.failed[v.id] = true; G.fails++; newFail = true;
+        addLog('crit', `${v.tr} FAILED — vault fire reported at ${v.label.split(' · ')[1]}, FDNY notified`);
+      }
+    }
+    for (const g of M.gridNodes) { const r = U.nodes[g.id]; if (r.V) { if (r.min < 114) p.v114 += dt; if (r.min < 110) p.v110 += dt; } }
+    p.vr += dt * (S.vr >= 0.08 ? 0.6 : S.vr > 0 ? 0.3 : 0); if (S.dr) p.dr += dt;
+    if (newFail) study(true);
+    evalObjectives();
+    if (!G.ended && G.fails >= 2) endScenario(false, 'network collapse — two vault failures');
+    if (!G.ended && G.t >= G.sc.limit) endScenario(false, 'time expired with objectives open');
+    renderMission();
+  }
+  const clockOf = (t) => { const m = G.sc.clock[0] * 60 + G.sc.clock[1] + Math.floor(t); return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+  const OBJI = { todo: '○', done: '●', failed: '✕', hold: '◇' };
+  const OBJC = { todo: 'var(--dim)', done: 'var(--ok)', failed: 'var(--crit)', hold: 'var(--info)' };
+
+  let missionMin = false;
+  try { missionMin = localStorage.getItem('gridgame.missionMin') === '1'; } catch (e) { /* storage unavailable */ }
+  function renderMission() {
+    const el = $('mission'), tog = $('mission-toggle');
+    el.hidden = missionMin;
+    tog.textContent = missionMin ? '+' : '–'; tog.title = missionMin ? 'Expand' : 'Minimize';
+    tog.setAttribute('aria-expanded', String(!missionMin)); tog.parentElement.parentElement.classList.toggle('collapsed', missionMin);
+    $('mission-meta').textContent = !G ? (missionMin ? `${SCN.length} available` : '')
+      : G.ended ? (missionMin ? `grade ${scoreOf().grade} · ${scoreOf().total}` : 'debrief')
+      : missionMin ? `${clockOf(G.t)} · ${G.obj.filter(o => o.st === 'done').length}/${G.obj.length} obj · ${scoreOf().total}${G.paused ? ' · paused' : ''}`
+      : `T+${Math.floor(G.t)} of ${G.sc.limit} min`;
+    if (!G) {
+      el.innerHTML = `<p class="note">Sandbox mode is active. Pick a shift scenario to play for score; the scenario takes over load and events until it ends.</p>`
+        + `<div class="scens">` + SCN.map(sc => `<div class="scen"><div class="scen-h"><b>${sc.title}</b><span class="diff d${sc.diff}" title="${DIFF[sc.diff]}">${'▮'.repeat(sc.diff)}${'▯'.repeat(3 - sc.diff)}</span></div>`
+          + `<p>${sc.brief}</p><div class="scen-f"><span class="c-dim num">${sc.limit} min shift${best(sc.id) ? ` · best ${best(sc.id)}` : ''}</span><button class="btn primary" data-start="${sc.id}">Start</button></div></div>`).join('') + `</div>`;
+      return;
+    }
+    const sc = scoreOf(), objs = `<ul class="objs">` + G.obj.map(o => `<li><span style="color:${OBJC[o.st]}">${OBJI[o.st]}</span><span class="${o.st === 'done' ? 'c-dim' : ''}">${o.text}${o.hold ? ' <em class="c-dim">(hold)</em>' : ''}</span></li>`).join('') + `</ul>`;
+    if (G.ended) {
+      el.innerHTML = `<div class="deb"><div class="grade g${sc.grade}">${sc.grade}</div><div><h3>${G.sc.title}</h3><p class="note">${G.ended.ok ? 'Shift complete' : 'Shift failed'} — ${G.ended.why} at ${clockOf(G.t)}.</p></div></div>`
+        + objs + `<table class="tbl score"><tbody><tr><td class="lab">Starting score</td><td>1000</td></tr>`
+        + sc.items.filter(x => x[1] >= 0.5).map(x => `<tr><td class="lab">${x[0]}</td><td class="c-crit">−${f0(x[1])}</td></tr>`).join('')
+        + (sc.bonus ? `<tr><td class="lab">Time remaining bonus</td><td class="c-ok">+${sc.bonus}</td></tr>` : '')
+        + `<tr><td class="lab"><b>Final score</b></td><td><b>${sc.total}</b></td></tr></tbody></table>`
+        + `<div class="btnrow"><button class="btn primary" data-start="${G.sc.id}">Retry</button><button class="btn" data-exit="1">Back to scenarios</button></div>`;
+      return;
+    }
+    const hot = M.vaults.map(v => [v, G.heat[v.id] || 0]).filter(x => x[1] > 0.05 && !S.failed[x[0].id]).sort((a, b) => b[1] - a[1])[0];
+    el.innerHTML = `<div class="mhead"><div><h3>${G.sc.title}</h3><div class="type">${DIFF[G.sc.diff]} · ${G.paused ? 'paused' : 'shift in progress'}</div></div>`
+      + `<div class="mclock"><div class="num big">${clockOf(G.t)}</div><div class="c-dim num">${Math.max(0, Math.ceil(G.sc.limit - G.t))} min left</div></div></div>`
+      + (G.t < 2 ? `<p class="note">${G.sc.brief}</p>` : '') + `<p class="note tip">${G.sc.tip}</p>` + objs
+      + `<div class="mstats"><div><span class="k">Score</span><span class="num big">${sc.total}</span></div>`
+      + `<div><span class="k">Hottest vault</span><span class="num ${hot && hot[1] > HEAT_FAIL * 0.6 ? 'c-crit' : hot ? 'c-warn' : ''}">${hot ? hot[0].tr + ' ' + f0(hot[1] / HEAT_FAIL * 100) + '% to failure' : 'all normal'}</span></div>`
+      + `<div><span class="k">Violations</span><span class="num ${G.viol ? 'c-crit' : ''}">${G.viol}</span></div></div>`
+      + `<div class="btnrow"><div class="seg" role="group" aria-label="Simulation speed">`
+      + [1, 4].map(x => `<button class="btn ${G.speed === x && !G.paused ? 'on' : ''}" data-speed="${x}">${x === 1 ? 'Real ×1' : 'Fast ×4'}</button>`).join('')
+      + `<button class="btn ${G.paused ? 'on' : ''}" data-pause="1">${G.paused ? 'Resume' : 'Pause'}</button></div><button class="btn danger" data-exit="1">Abort</button></div>`;
+  }
+
+  function renderSys() {
+    $('sysctl').innerHTML = `<div class="sysrow"><span>Voltage reduction</span><div class="seg" role="group" aria-label="Voltage reduction">`
+      + [[0, 'Normal'], [0.04, '4 %'], [0.08, '8 %']].map(([v, l]) => `<button class="btn ${S.vr === v ? 'on' : ''}" data-vr="${v}">${l}</button>`).join('') + `</div></div>`
+      + `<div class="sysrow"><span>Demand response</span><div class="seg" role="group" aria-label="Demand response">`
+      + [[false, 'Off'], [true, 'Active']].map(([v, l]) => `<button class="btn ${S.dr === v ? 'on' : ''}" data-dr="${v ? 1 : 0}">${l}</button>`).join('') + `</div></div>`;
+  }
+
+  /* ------------------------------ operations ------------------------------ */
+  const OPLABEL = { open: 'OPEN', close: 'CLOSE', block: 'OPEN & BLOCK', auto: 'RETURN TO AUTO' };
+  function execute() {
+    if (!armed || busy) return;
+    if (armed.id.startsWith('GRP:')) {
+      const fid = armed.id.slice(4), op = armed.op, nps = feederById(fid).vaults.map(v => 'NP' + v.slice(1));
+      busy = true; renderDev();
+      setTimeout(() => {
+        busy = false; armed = null;
+        for (const np of nps) {
+          const sw = S.sw[np];
+          if (sw.tag) { addLog('high', `${np} ${OPLABEL[op]} rejected — hold tag in place`); continue; }
+          if ((op === 'block') === sw.manual) continue;
+          if (G && G.sc.onOp) G.sc.onOp(np, op);
+          sw.manual = op === 'block';
+          addLog('info', `Operator: ${np} ${OPLABEL[op]} — executed`);
+        }
+        study(); if (G) { evalObjectives(); renderMission(); }
+      }, 650);
+      return;
+    }
+    const { id, op } = armed, sw = S.sw[id];
+    if (sw.tag) { addLog('high', `${id} ${OPLABEL[op]} rejected — hold tag in place`); armed = null; render(); return; }
+    const fkey = id.startsWith('CB-') ? id.slice(3) : null;
+    if (op === 'close' && fkey && S.faults[fkey]) violation(`${id} closed into a known ${fkey.startsWith('TR') ? 'transformer' : 'cable'} fault`);
+    if (G && G.sc.onOp) G.sc.onOp(id, op);
+    busy = true; renderDev();
+    setTimeout(() => {
+      busy = false; armed = null;
+      if (op === 'open') { sw.closed = false; sw.lockout = ''; }
+      if (op === 'close') { sw.closed = true; sw.lockout = ''; }
+      if (op === 'block') sw.manual = true;
+      if (op === 'auto') sw.manual = false;
+      addLog('info', `Operator: ${id} ${OPLABEL[op]} — executed`);
+      study(); if (G) { evalObjectives(); renderMission(); }
+    }, 650);
+  }
+  function select(t, id) { if (armed && armed.id !== id) armed = null; sel = { t, id }; render(); }
+
+  document.addEventListener('click', (e) => {
+    const g = e.target.closest('[data-start],[data-exit],[data-speed],[data-pause],[data-vr],[data-dr]');
+    if (g) {
+      const d = g.dataset;
+      if (d.start) startScenario(d.start);
+      else if (d.exit) exitScenario();
+      else if (d.speed && G) { G.speed = +d.speed; G.paused = false; renderMission(); }
+      else if (d.pause && G) { G.paused = !G.paused; renderMission(); }
+      else if (d.vr !== undefined && +d.vr !== S.vr) { S.vr = +d.vr; addLog('info', S.vr ? `Operator: ${S.vr * 100}% voltage reduction ordered at Hudson substation` : 'Operator: voltage reduction cancelled'); study(); if (G) evalObjectives(); }
+      else if (d.dr !== undefined && !!+d.dr !== S.dr) { S.dr = !!+d.dr; addLog('info', S.dr ? 'Operator: demand response event called — commercial customers curtailing' : 'Operator: demand response event ended'); study(); if (G) evalObjectives(); }
+      return;
+    }
+    const ack = e.target.closest('[data-ack]');
+    if (ack) { acked.add(ack.dataset.ack); renderConsole(); return; }
+    const actEl = e.target.closest('[data-act]');
+    if (actEl) {
+      const act = actEl.dataset.act, id = sel && (sel.t === 'vault' ? vaultById(sel.id).np : sel.id);
+      if (act === 'sel' && actEl.dataset.grp) { const gid = 'GRP:' + actEl.dataset.grp; armed = { id: gid, op: actEl.dataset.op, label: `${OPLABEL[actEl.dataset.op]} all ${actEl.dataset.grp} protectors`, until: Date.now() + 15000 }; addLog('info', `Operator: ${actEl.dataset.grp} protectors selected for ${OPLABEL[armed.op]}`); renderDev(); renderConsole(); }
+      else if (act === 'sel') { armed = { id, op: actEl.dataset.op, label: `${OPLABEL[actEl.dataset.op]} ${id}`, until: Date.now() + 15000 }; addLog('info', `Operator: ${id} selected for ${OPLABEL[armed.op]}`); renderDev(); renderConsole(); }
+      else if (act === 'exec') execute();
+      else if (act === 'cancel') { addLog('info', `Operator: ${armed.id} selection cancelled`); armed = null; renderDev(); renderConsole(); }
+      else if (act === 'tag') { const sw = S.sw[id]; sw.tag = !sw.tag; armed = null; addLog('info', `Operator: hold tag ${sw.tag ? 'placed on' : 'removed from'} ${id}`); if (G && G.sc.onTag) G.sc.onTag(id, sw.tag); if (G) { study(); evalObjectives(); } render(); }
+      else if (act === 'crew') { const k = actEl.dataset.key; crews[k] = k.startsWith('TR') ? 25 : 20; addLog('info', `Repair crew dispatched to ${k}`); if (G) evalObjectives(); render(); }
+      return;
+    }
+    const s = e.target.closest('[data-sel]');
+    if (s) { const [t, ...rest] = s.dataset.sel.split(':'); select(t, rest.join(':')); }
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { armed = null; sel = null; render(); } });
+
+  let raf = 0;
+  $('load').addEventListener('input', (e) => { S.load = +e.target.value / 100; $('loadv').textContent = e.target.value + '%'; cancelAnimationFrame(raf); raf = requestAnimationFrame(study); });
+  $('load').addEventListener('change', (e) => addLog('info', `Network load set to ${e.target.value}% of summer peak`));
+  $('mission-toggle').addEventListener('click', () => {
+    missionMin = !missionMin;
+    try { localStorage.setItem('gridgame.missionMin', missionMin ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+    renderMission();
+  });
+  $('ackall').addEventListener('click', () => { alarms().forEach(a => acked.add(a.id)); renderConsole(); });
+  $('reset').addEventListener('click', () => {
+    if (G) { exitScenario(); return; }
+    S = E.createState(M); sel = null; armed = null; for (const k in crews) delete crews[k];
+    addLog('info', 'Simulator reset to normal configuration'); study();
+  });
+  $('inject').addEventListener('click', () => {
+    const v = $('evt').value;
+    if (v === 'fault') {
+      const cand = M.feeders.filter(f => S.sw[f.breaker].closed && !S.faults[f.id] && R.summary.U.feeders[f.id].energized);
+      if (!cand.length) { addLog('info', 'No energized feeder available for a fault'); renderConsole(); return; }
+      const f = cand[Math.floor(Math.random() * cand.length)];
+      S.faults[f.id] = true; addLog('crit', `Relay: phase-to-ground fault detected on ${f.id} primary cable`);
+      sel = { t: 'sw', id: f.breaker };
+    } else if (v === 'tr1' || v === 'tr2') {
+      const k = v.slice(2), sw = S.sw['CB-TR' + k];
+      if (!sw.closed) { addLog('info', `TR${k} is already out of service`); renderConsole(); return; }
+      S.faults['TR' + k] = true;
+      addLog('crit', `Relay: TR${k} differential protection operated — internal transformer fault`);
+      sel = { t: 'sw', id: 'CB-BT' };
+    } else if (v === 'heat') {
+      S.load = 1.10; addLog('high', 'Heat wave: network load rising to 110% of summer peak');
+    }
+    armed = null; study();
+  });
+
+  setInterval(() => {
+    const c = $('clock'); if (c) c.textContent = hhmmss(new Date());
+    if (armed && Date.now() > armed.until && !busy) { addLog('info', `Operator: ${armed.id} selection timed out`); armed = null; renderDev(); renderConsole(); }
+    const sl = $('sbo-left'); if (sl && armed) sl.textContent = Math.max(0, Math.ceil((armed.until - Date.now()) / 1000));
+    const dt = G ? (G.ended || G.paused ? 0 : G.speed / 3) : 1;
+    let fixed = false;
+    for (const k in crews) {
+      crews[k] -= dt;
+      if (crews[k] <= 0) { delete crews[k]; delete S.faults[k]; S.sw['CB-' + k].lockout = ''; fixed = true;
+        addLog('info', `Crew reports ${k} ${k.startsWith('TR') ? 'transformer' : 'cable'} repaired — ready to restore`); }
+    }
+    if (G) gameTick(); else if (fixed) study(); else if (Object.keys(crews).length && sel && !ptrDown) renderDev();
+  }, 1000);
+
+  addLog('info', 'Console online — Midtown West network in normal configuration');
+  study();
+})();
+
+</script>
+</body></html>
