@@ -148,6 +148,24 @@ svg text { font-family: var(--f-data); }
 .mintog:hover { color: var(--text); border-color: var(--dim); }
 .ph.collapsed { border-bottom: 0; }
 
+/* customer impact */
+.imp { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 12px; }
+.irow { display: flex; flex-direction: column; gap: 5px; }
+.ihead { display: flex; align-items: baseline; gap: 10px; }
+.ihead .k { font-family: var(--f-display); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); flex: 1; min-width: 0; }
+.ihead .iv { font-size: 20px; font-weight: 600; line-height: 1; }
+.ibar { display: flex; height: 14px; background: var(--panel2); border: 1px solid var(--rule2); overflow: hidden;
+  background-image: linear-gradient(90deg, transparent calc(25% - 1px), var(--rule2) calc(25% - 1px) 25%, transparent 25% calc(50% - 1px), var(--rule2) calc(50% - 1px) 50%, transparent 50% calc(75% - 1px), var(--rule2) calc(75% - 1px) 75%, transparent 75%); }
+.ibar span { display: block; height: 100%; transition: width .4s ease; }
+.ibar span + span { border-left: 1px solid var(--bg); }
+.icauses { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--dim); }
+.icauses b { display: inline-block; width: 9px; height: 9px; margin-right: 5px; vertical-align: -1px; }
+.icauses .num { color: var(--text); }
+.iworst { border-top: 1px solid var(--rule); padding-top: 8px; }
+.ilink { background: none; border: 0; padding: 0; color: var(--text); text-decoration: underline; text-decoration-color: var(--rule2); text-underline-offset: 3px; cursor: pointer; font-size: inherit; }
+.ilink:hover { text-decoration-color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .ibar span { transition: none; } }
+
 /* system controls */
 .sys { border-top: 1px solid var(--rule); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .sysrow { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--dim); }
@@ -210,6 +228,7 @@ svg text { font-family: var(--f-data); }
 </header>
 
 <div class="grid">
+  <div class="stack">
   <section class="panel">
     <div class="ph"><h2>Network view · geographic</h2><span class="meta" id="mapmeta"></span></div>
     <div class="mapwrap"><svg id="map" viewBox="-470 -110 1330 870" role="img" aria-label="Map of the Midtown West secondary network"></svg></div>
@@ -222,8 +241,14 @@ svg text { font-family: var(--f-data); }
       <span><b style="background:var(--open)"></b>Open</span>
       <span><b style="border:2px solid var(--warn)"></b>Vault ≥ 100 %</span>
       <span><b style="border:2px solid var(--crit)"></b>Vault ≥ 130 %</span>
+      <span><span class="num" style="color:var(--text);margin-right:6px">410 cust</span>Customers served by vault</span>
     </div>
   </section>
+  <section class="panel">
+    <div class="ph"><h2>Customer impact</h2><span class="meta" id="impmeta"></span></div>
+    <div class="imp" id="impact"></div>
+  </section>
+  </div>
   <div class="side">
     <section class="panel">
       <div class="ph"><h2>Shift scenarios</h2><div class="phr"><span class="meta" id="mission-meta"></span><button class="mintog" id="mission-toggle" aria-expanded="true" aria-controls="mission" title="Minimize">–</button></div></div>
@@ -714,6 +739,41 @@ svg text { font-family: var(--f-data); }
 
   function addLog(sev, msg) { log.unshift({ t: new Date(), sev, msg }); if (log.length > 250) log.pop(); }
 
+  /* ------------------------------ customers ------------------------------ */
+  // Each grid node's customers are served from the nearest network transformer vault (corners without a
+  // vault fall to the closest one). Counts are fixed by the model; impact is recomputed after every study.
+  const AREA = {}, VCUST = {};
+  for (const L of M.loads) {
+    const n = nodeOf(L.node);
+    const v = M.vaults.reduce((b, x) => { const d = Math.abs(nodeOf(x.node).x - n.x) + Math.abs(nodeOf(x.node).y - n.y); return !b || d < b.d ? { v: x, d } : b; }, null).v;
+    AREA[L.node] = v.id; VCUST[v.id] = (VCUST[v.id] || 0) + L.cust;
+  }
+  const CUST_TOTAL = M.loads.reduce((a, L) => a + L.cust, 0);
+  const OUTC = { dead: ['Network de-energized', 'var(--crit)'], fail: ['Vault failure isolation', '#b8323a'] };
+  const CMPC = { lowv: ['Low voltage', 'var(--warn)'], highv: ['High voltage', 'var(--info)'], unbal: ['Phase unbalance', 'var(--hv)'],
+    dr: ['Demand response curtailment', 'var(--mv)'], heat: ['Smoking manhole (vault ≥ 130 %)', 'var(--crit)'] };
+  function impact() {
+    const U = R.summary.U, r = { out: 0, cmp: 0, outBy: {}, cmpBy: {}, areas: {} };
+    const add = (o, k, n) => { o[k] = (o[k] || 0) + n; };
+    for (const L of M.loads) {
+      const area = AREA[L.node], nd = U.nodes[L.node], c = L.cust;
+      const a = r.areas[area] || (r.areas[area] = { out: 0, cmp: 0, why: {} });
+      const dead = !nd.V ? 'dead' : S.failed[area] ? 'fail' : null;
+      if (dead) { r.out += c; add(r.outBy, dead, c); a.out += c; add(a.why, dead, c); continue; }
+      const hi = Math.max(...nd.V), vp = U.vaults[area] ? U.vaults[area].pct : 0;
+      const f = {
+        lowv: nd.min < 114 ? Math.min(0.85, 0.1 + (114 - nd.min) * 0.09) : 0,     // ANSI Range A floor; ~46 % calling at 110 V
+        highv: hi > 126 ? Math.min(0.6, 0.1 + (hi - 126) * 0.1) : 0,
+        unbal: nd.vuf > 2 ? Math.min(0.4, 0.1 + (nd.vuf - 2) * 0.1) : 0,        // three-phase motors run hot above 2 %
+        dr: S.dr && L.pf < 0.93 ? 0.15 : 0,                                      // curtailed commercial accounts
+        heat: vp >= 130 ? 0.12 : 0
+      };
+      const k = Object.keys(f).reduce((b, x) => f[x] > f[b] ? x : b, 'lowv'), n = Math.round(c * f[k]);
+      if (n > 0) { r.cmp += n; add(r.cmpBy, k, n); a.cmp += n; add(a.why, k, n); }
+    }
+    return r;
+  }
+
   let ptrDown = false, pendingRender = false;
   function study(quiet) {
     R = E.runStudy(M, S);
@@ -841,6 +901,7 @@ svg text { font-family: var(--f-data); }
         + `<rect x="${mx - 5}" y="${my - 5}" width="10" height="10" fill="${np.closed ? 'var(--closed)' : 'var(--open)'}" stroke="var(--bg)" stroke-width="1.5"/>`
         + (np.manual ? `<text x="${mx + 9}" y="${my - 6}" fill="var(--warn)" font-size="9" font-weight="600">M</text>` : '')
         + (on ? `<rect x="${v.x - 17}" y="${v.y - 17}" width="34" height="34" fill="none" stroke="var(--text)" stroke-dasharray="3 3"/>` : '')
+        + `<text x="${v.x}" y="${v.y + 31}" fill="${S.failed[v.id] || !U.nodes[v.node].V ? 'var(--crit)' : 'var(--dim)'}" font-size="9" text-anchor="middle">${f0(VCUST[v.id] || 0)} cust</text>`
         + `</g>`);
     }
     // grid nodes
@@ -854,6 +915,31 @@ svg text { font-family: var(--f-data); }
     }
     $('map').innerHTML = h.join('');
     $('mapmeta').textContent = `${M.vaults.length} network transformers · ${M.gridNodes.length} grid nodes · ${M.feeders.length} feeders`;
+  }
+
+  /* ------------------------------ customer impact ------------------------------ */
+  function renderImpact() {
+    const I = impact();
+    const pct = (n) => (n / CUST_TOTAL * 100);
+    const bar = (by, C) => `<div class="ibar">` + Object.keys(C).filter(k => by[k]).map(k =>
+      `<span style="width:max(3px, ${pct(by[k]).toFixed(2)}%);background:${C[k][1]}" title="${C[k][0]}: ${f0(by[k])}"></span>`).join('') + `</div>`;
+    const causes = (by, C, none) => {
+      const ks = Object.keys(C).filter(k => by[k]);
+      return `<div class="icauses">` + (ks.length ? ks.map(k => `<span><b style="background:${C[k][1]}"></b>${C[k][0]} <span class="num">${f0(by[k])}</span></span>`).join('')
+        : `<span class="c-dim">${none}</span>`) + `</div>`;
+    };
+    const row = (lab, n, by, C, cls, none) => `<div class="irow"><div class="ihead"><span class="k">${lab}</span>`
+      + `<span class="num iv ${n ? cls : 'c-ok'}">${f0(n)}</span><span class="num c-dim">${f1(pct(n))} %</span></div>${bar(by, C)}${causes(by, C, none)}</div>`;
+    const worst = Object.entries(I.areas).map(([id, a]) => [id, a, a.out * 3 + a.cmp]).filter(x => x[2] > 0).sort((a, b) => b[2] - a[2])[0];
+    let w = `<p class="note iworst">All ${f0(CUST_TOTAL)} customers in service with normal voltage.</p>`;
+    if (worst) {
+      const [id, a] = worst, v = vaultById(id), k = Object.keys(a.why).sort((x, y) => a.why[y] - a.why[x])[0];
+      w = `<p class="note iworst">Hardest-hit area: <button class="ilink" data-sel="vault:${id}">${esc(v.label)}</button> — `
+        + `${a.out ? f0(a.out) + ' out' : f0(a.cmp) + ' complaining'} of ${f0(VCUST[id])} customers (${(OUTC[k] || CMPC[k])[0].toLowerCase()})</p>`;
+    }
+    $('impact').innerHTML = row('Customers without power', I.out, I.outBy, OUTC, 'c-crit', 'No outages')
+      + row('Customers with complaints', I.cmp, I.cmpBy, CMPC, 'c-warn', 'No complaints') + w;
+    $('impmeta').textContent = `${f0(CUST_TOTAL)} customers · ${M.vaults.length} transformer areas`;
   }
 
   /* ------------------------------ one-line ------------------------------ */
@@ -999,7 +1085,8 @@ svg text { font-family: var(--f-data); }
       h.push(`<div><h3>${esc(v.np)}</h3><div class="type">${esc(v.label)} · ${v.tr} 1000 kVA 13.8 kV–208Y/120 V · fed by ${v.feeder}</div></div>`, stateBlock(sw));
       h.push(phaseRows([['UBLF A', u.Ia ? u.Ia.map(f0) : ['—', '—', '—']], ['DPF A', d.Ia ? [f0(d.Ia[0]), f0(d.Ia[0]), f0(d.Ia[0])] : ['—', '—', '—']]]));
       h.push(`<dl class="kv"><dt>Loading UBLF</dt><dd class="${u.pct >= 130 ? 'c-crit' : u.pct >= 100 ? 'c-warn' : ''}">${f1(u.pct)} %</dd><dt>Loading DPF</dt><dd>${f1(d.pct)} %</dd>`
-        + `<dt>Real power</dt><dd>${f0(u.P)} kW</dd><dt>Protector mode</dt><dd>${sw.manual ? 'Blocked open' : 'Automatic'}</dd></dl>`);
+        + `<dt>Real power</dt><dd>${f0(u.P)} kW</dd><dt>Protector mode</dt><dd>${sw.manual ? 'Blocked open' : 'Automatic'}</dd>`
+        + `<dt>Customers served</dt><dd>${f0(VCUST[v.id] || 0)}</dd><dt>Served area</dt><dd>${M.loads.filter(L => AREA[L.node] === v.id).map(L => esc(gridLabel(L.node))).join('<br>')}</dd></dl>`);
       h.push(`<p class="note">The protector trips on reverse power when ${v.feeder} is lost and recloses automatically when the feeder is restored.</p>`);
       h.push(controlBlock(v.np));
       el.innerHTML = h.join('');
@@ -1072,7 +1159,7 @@ svg text { font-family: var(--f-data); }
     renderMission(); renderSys();
     const inGame = !!G;
     $('load').disabled = inGame; $('evt').disabled = inGame; $('inject').disabled = inGame; $('reset').textContent = inGame ? 'Abort' : 'Reset';
-    renderMap(); renderNPBoard(); renderOneLine(); renderDev(); renderStudy(); renderConsole(); $('loadv').textContent = Math.round(S.load * 100) + '%'; $('load').value = Math.round(S.load * 100); }
+    renderMap(); renderImpact(); renderNPBoard(); renderOneLine(); renderDev(); renderStudy(); renderConsole(); $('loadv').textContent = Math.round(S.load * 100) + '%'; $('load').value = Math.round(S.load * 100); }
 
   /* ============================== Level 2: scenarios ============================== */
   const SCN = [
