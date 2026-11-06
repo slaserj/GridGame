@@ -1,0 +1,17 @@
+<!-- GridGame DER Planner · paste this whole block into a Squarespace Code Block (Code Block, HTML mode, "Display Source" off). -->
+<div style="width:100%;margin:0 auto;background:#090d12;">
+  <iframe id="gridgame-der-frame" src="https://sim.jonesgrid.com/der/" title="GridGame DER interconnection planner"
+          loading="lazy" style="display:block;width:100%;height:1500px;border:0;background:#090d12;"></iframe>
+</div>
+<script>
+(function () {
+  var f = document.getElementById('gridgame-der-frame');
+  var ORIGIN = 'https://sim.jonesgrid.com';
+  window.addEventListener('message', function (e) {
+    if (e.origin !== ORIGIN || e.source !== f.contentWindow) return;
+    var d = e.data;
+    if (d && d.type === 'gridgame:height' && d.height > 0) f.style.height = d.height + 'px';
+  });
+  f.addEventListener('load', function () { f.contentWindow.postMessage({ type: 'gridgame:ping' }, ORIGIN); });
+})();
+</script>

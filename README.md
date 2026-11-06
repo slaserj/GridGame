@@ -1,8 +1,15 @@
-# GridGame — Midtown West ADMS Simulator
+# GridGame — Midtown West Network
 
-A browser-based distribution operations (ADMS) simulator for a fictional
-13.8 kV / 208Y-120 V Manhattan-style secondary network. Everything runs
-client-side in a single `index.html` — no build step.
+Two browser games built on one fictional 13.8 kV / 208Y-120 V Manhattan-style
+secondary network. Everything runs client-side — no build step.
+
+| Page | What it is |
+|---|---|
+| [`/`](index.html) | **ADMS simulator** — operate the network: switching, protectors, alarms, customer impact, shift scenarios |
+| [`/der/`](der/index.html) | **DER interconnection planner** — connect PV, storage, CHP, fuel cells and EV charging; run screens, hosting capacity, hourly profiles and compare interconnection options |
+
+Both pages load the same network model and power-flow engine from
+[`js/gridengine.js`](js/gridengine.js).
 
 ## Run locally
 
@@ -21,7 +28,8 @@ python -m http.server 8000
 
 ## Embedding in Squarespace
 
-Paste the contents of [`squarespace-embed.html`](squarespace-embed.html) into a
+Paste the contents of [`squarespace-embed.html`](squarespace-embed.html) (ADMS)
+or [`squarespace-embed-der.html`](squarespace-embed-der.html) (DER planner) into a
 Squarespace **Code Block**. The game reports its height to the parent page via
 `postMessage`, so the iframe resizes to fit with no inner scrollbar.
 

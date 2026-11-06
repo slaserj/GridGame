@@ -1,0 +1,1119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Midtown West DER Planner · GridGame</title>
+<meta name="description" content="GridGame DER Planner: connect solar, storage, CHP, fuel cells and EV charging to a fictional Manhattan-style secondary network and see the interconnection screens, hosting capacity and options a DER planner works with.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Planning console: same control-room language as the ADMS simulator, single dark theme. */
+:root {
+  color-scheme: dark;
+  --bg: #090d12; --panel: #0f151c; --panel2: #141c25; --rule: #1f2b38; --rule2: #2a3a4b;
+  --text: #cfd9e3; --dim: #8291a1; --faint: #4c5b6b;
+  --block: #111921; --street: #0b1016; --water: #0b1822; --waterline: #14303f;
+  --hv: #b897ff; --mv: #f2a93b; --lv: #3cc4cf; --dead: #3a4552;
+  --closed: #e5484d; --open: #36b86a;
+  --ok: #36b86a; --warn: #f2c94c; --crit: #ff4d4f; --info: #6aa8ff;
+  --f-display: "Chakra Petch", "Bahnschrift", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font-family: var(--f-body); font-size: 14px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 28px; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button, select, input { font: inherit; color: inherit; }
+.num { font-family: var(--f-data); font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+.top { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; justify-content: space-between; border: 1px solid var(--rule); background: var(--panel); padding: 12px 16px; }
+.brand .eyebrow { font-family: var(--f-display); font-size: 11px; letter-spacing: .22em; color: var(--mv); text-transform: uppercase; }
+.brand h1 { margin: 2px 0 0; font-family: var(--f-display); font-weight: 600; font-size: 22px; letter-spacing: .02em; text-wrap: balance; }
+.brand .sub { color: var(--dim); font-size: 12px; }
+.brand .sub a { color: var(--dim); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 1px solid var(--rule2); background: var(--panel2); padding: 5px 10px; min-width: 92px; }
+.chip .k { font-family: var(--f-display); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+.chip .v { font-family: var(--f-data); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chip.ok .v { color: var(--ok); } .chip.warn .v { color: var(--warn); } .chip.crit .v { color: var(--crit); }
+.chip.crit { border-color: color-mix(in srgb, var(--crit) 55%, var(--rule2)); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.ctl { display: flex; flex-direction: column; gap: 3px; }
+.ctl > label, .ctl > .lab { font-family: var(--f-display); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+
+.btn { background: var(--panel2); border: 1px solid var(--rule2); padding: 6px 12px; cursor: pointer; font-family: var(--f-display); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+.btn:hover:not(:disabled) { border-color: var(--dim); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.primary { border-color: var(--mv); color: var(--mv); }
+.btn.danger { border-color: var(--crit); color: var(--crit); }
+.btn.on { background: color-mix(in srgb, var(--mv) 18%, var(--panel2)); border-color: var(--mv); color: var(--mv); }
+.seg { display: inline-flex; }
+.seg .btn { padding: 4px 10px; font-size: 11px; }
+.seg .btn + .btn { border-left-width: 0; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
+select, input[type=number] { background: var(--panel2); border: 1px solid var(--rule2); padding: 5px 8px; }
+input[type=range] { accent-color: var(--mv); width: 100%; }
+
+.grid { display: grid; gap: 12px; margin-top: 12px; grid-template-columns: minmax(0, 1fr) 384px; }
+.lower { display: grid; gap: 12px; margin-top: 12px; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+.stack, .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.panel { border: 1px solid var(--rule); background: var(--panel); min-width: 0; }
+.ph { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--rule); min-height: 38px; }
+.ph h2 { margin: 0; font-family: var(--f-display); font-size: 12px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; white-space: nowrap; }
+.ph .meta { color: var(--dim); font-size: 11px; font-family: var(--f-data); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.phr { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ph.collapsed { border-bottom: 0; }
+.mintog { width: 24px; height: 22px; display: grid; place-items: center; background: var(--panel2); border: 1px solid var(--rule2); cursor: pointer; font-family: var(--f-data); font-size: 14px; line-height: 1; color: var(--dim); flex: none; }
+.mintog:hover { color: var(--text); border-color: var(--dim); }
+.note { color: var(--dim); font-size: 12px; margin: 0; }
+
+.mapwrap { overflow-x: auto; }
+#map { display: block; width: 100%; min-width: 620px; height: auto; }
+svg text { font-family: var(--f-data); }
+.sel-hit { cursor: pointer; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 8px 12px; border-top: 1px solid var(--rule); color: var(--dim); font-size: 11px; }
+.legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; }
+.legend b { display: inline-block; width: 10px; height: 10px; vertical-align: -1px; margin-right: 6px; }
+.flow { stroke-dasharray: 2 14; animation: flow 1.6s linear infinite; }
+.flow.rev { animation-direction: reverse; }
+@keyframes flow { to { stroke-dashoffset: -32; } }
+.blink { animation: blink 1s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .flow { animation: none; opacity: 0; } .blink { animation: none; } }
+
+/* profile chart */
+.prof { padding: 8px 12px 10px; }
+#prof { display: block; width: 100%; height: auto; }
+.plegend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--dim); margin-top: 4px; }
+.plegend i { display: inline-block; width: 16px; height: 3px; vertical-align: middle; margin-right: 5px; }
+.plegend i.dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important; }
+.plegend b { display: inline-block; width: 10px; height: 10px; vertical-align: -1px; margin-right: 5px; }
+
+/* builder */
+.bld { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.bld h3, .mission h3 { margin: 0; font-family: var(--f-display); font-size: 18px; font-weight: 600; }
+.type { color: var(--dim); font-size: 12px; }
+.fld { display: flex; flex-direction: column; gap: 5px; }
+.fld > label, .fld > .lab { display: flex; justify-content: space-between; gap: 8px; font-family: var(--f-display); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+.fld > label .num, .fld > .lab .num { color: var(--text); font-size: 12px; letter-spacing: 0; }
+.typegrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.tbtn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 8px; background: var(--panel2); border: 1px solid var(--rule2); cursor: pointer; text-align: left; min-width: 0; }
+.tbtn:hover { border-color: var(--dim); }
+.tbtn.on { border-color: var(--text); background: color-mix(in srgb, var(--text) 8%, var(--panel2)); }
+.tbtn .code { font-family: var(--f-data); font-weight: 600; font-size: 12px; }
+.tbtn .nm { font-size: 10.5px; color: var(--dim); line-height: 1.2; }
+.sizerow { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 10px; align-items: center; }
+.sizerow input[type=number] { width: 100%; }
+select { width: 100%; }
+.hcbox { display: flex; justify-content: space-between; gap: 10px; border: 1px dashed var(--rule2); padding: 7px 10px; font-size: 12px; color: var(--dim); }
+.hcbox b { color: var(--text); font-family: var(--f-data); font-weight: 600; }
+.brief ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.brief b { color: var(--text); }
+
+/* queue */
+.queue { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; }
+.queue li { display: grid; grid-template-columns: 22px 48px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 7px 12px; border-bottom: 1px solid color-mix(in srgb, var(--rule) 60%, transparent); font-size: 12px; cursor: pointer; }
+.queue li:hover { background: var(--panel2); }
+.queue li.on { background: color-mix(in srgb, var(--text) 7%, var(--panel2)); }
+.queue li.draft { opacity: .8; border-left: 2px dashed var(--mv); }
+.queue .qn { color: var(--faint); font-family: var(--f-data); }
+.queue .qt { font-family: var(--f-data); font-weight: 600; font-size: 11px; text-align: center; padding: 1px 4px; color: #0b1016; }
+.queue .qs { min-width: 0; }
+.queue .qs span { display: block; color: var(--dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue .x { background: none; border: 0; color: var(--faint); cursor: pointer; font-size: 15px; padding: 0 2px; }
+.queue .x:hover { color: var(--crit); }
+.queue .empty { display: block; color: var(--dim); cursor: default; padding: 12px; }
+.pill { font-family: var(--f-display); font-size: 10px; font-weight: 600; letter-spacing: .1em; padding: 1px 6px; border: 1px solid currentColor; white-space: nowrap; }
+
+/* tables */
+.tblwrap { overflow-x: auto; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tbl th { font-family: var(--f-display); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.tbl th:first-child, .tbl td:first-child { text-align: left; }
+.tbl td { padding: 6px 10px; border-bottom: 1px solid color-mix(in srgb, var(--rule) 60%, transparent); text-align: right; font-family: var(--f-data); font-variant-numeric: tabular-nums; vertical-align: top; }
+.tbl td.lab { font-family: var(--f-body); color: var(--text); }
+.tbl td .loc { display: block; color: var(--dim); font-size: 10.5px; font-family: var(--f-body); }
+.tbl td.l { text-align: left; }
+.tbl tr.clickable { cursor: pointer; } .tbl tr.clickable:hover td { background: var(--panel2); }
+.tbl tr.cur td { background: color-mix(in srgb, var(--mv) 9%, transparent); }
+.c-ok { color: var(--ok); } .c-warn { color: var(--warn); } .c-crit { color: var(--crit); } .c-dim { color: var(--faint); }
+.empty-p { padding: 14px 12px; color: var(--dim); font-size: 12px; margin: 0; }
+
+/* outputs */
+.outs { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 12px; }
+.ogrp h4 { margin: 0 0 4px; font-family: var(--f-display); font-size: 10px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 12px; margin: 0; }
+.kv dt { color: var(--dim); } .kv dd { margin: 0; font-family: var(--f-data); font-variant-numeric: tabular-nums; text-align: right; }
+.verdict { border: 1px solid currentColor; padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; }
+.verdict b { font-family: var(--f-display); letter-spacing: .1em; text-transform: uppercase; font-size: 13px; }
+.verdict span { color: var(--text); font-size: 12px; }
+.reqs { margin: 0; padding-left: 16px; font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+
+/* challenges */
+.mission { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.scens { display: flex; flex-direction: column; gap: 8px; }
+.scen { border: 1px solid var(--rule2); background: var(--panel2); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.scen p { margin: 0; font-size: 12px; color: var(--dim); }
+.scen-h, .scen-f { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.scen-h b { font-family: var(--f-display); font-size: 15px; font-weight: 600; }
+.scen-f span { font-size: 11px; }
+.diff { font-size: 11px; letter-spacing: 1px; }
+.diff.d1 { color: var(--ok); } .diff.d2 { color: var(--warn); } .diff.d3 { color: var(--crit); }
+.objs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; }
+.objs li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 6px; }
+.objs em { font-style: normal; font-size: 11px; color: var(--dim); }
+.tip { border-left: 2px solid var(--mv); padding-left: 8px; }
+.deb { display: flex; gap: 14px; align-items: center; }
+.grade { font-family: var(--f-display); font-size: 44px; font-weight: 700; width: 64px; height: 64px; display: grid; place-items: center; border: 2px solid currentColor; flex: none; }
+.gA, .gB { color: var(--ok); } .gC, .gD { color: var(--warn); }
+.budget { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.bbar { height: 8px; background: var(--panel2); border: 1px solid var(--rule2); overflow: hidden; }
+.bbar span { display: block; height: 100%; }
+
+.foot { margin-top: 14px; color: var(--faint); font-size: 11px; max-width: 120ch; }
+.foot a { color: var(--dim); }
+
+@media (max-width: 1080px) { .grid, .lower { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .brand h1 { font-size: 18px; } .chip { min-width: 0; flex: 1 1 40%; } .typegrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="eyebrow">Jones Grid Systems · DER Interconnection Planner</div>
+    <h1>Midtown West Network</h1>
+    <div class="sub">13.8 kV primary · 208Y/120 V secondary grid · Same network as the <a href="../">ADMS operations simulator</a></div>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="controls">
+    <div class="ctl"><span class="lab">Map study case</span>
+      <div class="seg" role="group" aria-label="Map study case"><button class="btn" data-case="light">Light load</button><button class="btn" data-case="peak">Summer peak</button></div></div>
+    <div class="ctl"><span class="lab">&nbsp;</span><button class="btn" id="reset">Clear queue</button></div>
+  </div>
+</header>
+
+<div class="grid">
+  <div class="stack">
+    <section class="panel">
+      <div class="ph"><h2>Network view · DER hosting</h2><span class="meta" id="mapmeta"></span></div>
+      <div class="mapwrap"><svg id="map" viewBox="-470 -110 1330 870" role="img" aria-label="Map of the Midtown West secondary network with DER projects and hosting capacity"></svg></div>
+      <div class="legend">
+        <span><i style="background:var(--mv)"></i>13.8 kV feeder</span>
+        <span><i style="background:var(--lv)"></i>208/120 V secondary main</span>
+        <span><b style="background:var(--closed)"></b>Protector closed</span>
+        <span><b style="background:var(--open)"></b>Protector open</span>
+        <span><b style="border:2px solid var(--crit)"></b>Reverse power / overload</span>
+        <span><b style="border-radius:50%;background:var(--ok)"></b><b style="border-radius:50%;background:var(--warn)"></b><b style="border-radius:50%;background:var(--crit)"></b>Hosting capacity high · mid · low</span>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Hourly profile</h2><div class="phr"><span class="meta" id="profmeta"></span>
+        <div class="seg" role="group" aria-label="Profile day"><button class="btn" data-season="summer">Summer</button><button class="btn" data-season="shoulder">Light-load</button><button class="btn" data-season="winter">Winter</button></div></div></div>
+      <div class="prof"><svg id="prof" viewBox="0 0 720 230" role="img" aria-label="24-hour profile of site load, DER output and host transformer flow"></svg><div class="plegend" id="plegend"></div></div>
+    </section>
+  </div>
+  <div class="side">
+    <section class="panel">
+      <div class="ph" id="ch-ph"><h2>Planning challenges</h2><div class="phr"><span class="meta" id="ch-meta"></span><button class="mintog" id="ch-toggle" aria-expanded="true" aria-controls="mission" title="Minimize">–</button></div></div>
+      <div class="mission" id="mission"></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Project builder</h2><span class="meta" id="bmeta"></span></div>
+      <div class="bld" id="builder"></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Interconnection queue</h2><span class="meta" id="qmeta"></span></div>
+      <ul class="queue" id="queue"></ul>
+    </section>
+  </div>
+</div>
+
+<div class="lower">
+  <div class="stack">
+    <section class="panel">
+      <div class="ph"><h2>Screening results</h2><span class="meta" id="scmeta"></span></div>
+      <div class="tblwrap" id="screens"></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Interconnection options</h2><span class="meta" id="opmeta">click a row to apply</span></div>
+      <div class="tblwrap" id="options"></div>
+    </section>
+  </div>
+  <div class="stack">
+    <section class="panel">
+      <div class="ph"><h2>Planning outputs</h2><span class="meta" id="outmeta"></span></div>
+      <div class="outs" id="outputs"></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Hosting capacity by site</h2><span class="meta">full-export PV · light load · after queue</span></div>
+      <div class="tblwrap" id="hctable"></div>
+    </section>
+  </div>
+</div>
+
+<p class="foot">Fictional network built for demonstration and training. Names, routes, device IDs, loads, costs and timelines are invented or illustrative and do not represent any utility's actual system, tariff or interconnection rules. Screens are simplified versions of common screening practice. Power flow: balanced positive-sequence nodal solution on the same model as the <a href="../">ADMS simulator</a>; light-load case uses spring midday load with DER at nameplate and the substation LTC lowered by line-drop compensation; peak case uses the summer peak hour with generation not credited, except storage under a firm peak-shaving schedule. Annual energy weights three representative days: summer (122), clear spring/fall (90) and winter/overcast (153). Fault study: bolted three-phase, synchronous machines at X″d = 0.16, inverters at 1.2 × rated current.</p>
+
+<script src="../js/gridengine.js"></script>
+<script>
+(function () {
+  'use strict';
+  const E = window.GridEngine, M = E.buildModel();
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const f0 = (x) => Math.round(x).toLocaleString('en-US'), f1 = (x) => x.toFixed(1), f2 = (x) => x.toFixed(2);
+  const money = (x) => x >= 1e6 ? '$' + (x / 1e6).toFixed(2) + 'M' : '$' + f0(x / 1000) + 'k';
+  const nodeOf = (id) => M.nodes[M.nIndex.get(id)];
+  const vaultById = (id) => M.vaults.find(v => v.id === id);
+  const LOADOF = Object.fromEntries(M.loads.map(L => [L.node, L]));
+  const GN = Object.fromEntries(M.gridNodes.map(g => [g.id, g]));
+  const siteName = (id) => GN[id].label;
+  const vkey = (vid) => vid.slice(1);
+
+  // host vault per site: the nearest network transformer (same rule as the ADMS customer areas)
+  const HOSTV = {};
+  for (const L of M.loads) {
+    const n = nodeOf(L.node);
+    HOSTV[L.node] = M.vaults.reduce((b, v) => { const m = nodeOf(v.node), d = Math.abs(m.x - n.x) + Math.abs(m.y - n.y); return !b || d < b.d ? { id: v.id, d } : b; }, null).id;
+  }
+
+  /* ============================== profiles ============================== */
+  const SHAPES = {
+    res:     [0.55, 0.50, 0.47, 0.45, 0.45, 0.50, 0.60, 0.70, 0.68, 0.62, 0.60, 0.60, 0.62, 0.65, 0.70, 0.75, 0.82, 0.92, 1.00, 1.00, 0.96, 0.88, 0.75, 0.63],
+    office:  [0.35, 0.33, 0.32, 0.32, 0.33, 0.38, 0.50, 0.70, 0.88, 0.96, 1.00, 1.00, 1.00, 1.00, 1.00, 0.98, 0.92, 0.80, 0.62, 0.50, 0.45, 0.42, 0.40, 0.37],
+    hotel:   [0.60, 0.56, 0.54, 0.53, 0.55, 0.62, 0.75, 0.85, 0.85, 0.80, 0.78, 0.80, 0.85, 0.88, 0.90, 0.92, 0.94, 0.98, 1.00, 1.00, 0.97, 0.90, 0.80, 0.68],
+    retail:  [0.40, 0.36, 0.34, 0.33, 0.33, 0.36, 0.45, 0.58, 0.70, 0.80, 0.88, 0.95, 1.00, 1.00, 0.98, 0.96, 0.96, 0.98, 1.00, 0.97, 0.90, 0.78, 0.62, 0.48],
+    theater: [0.45, 0.40, 0.38, 0.37, 0.37, 0.40, 0.48, 0.58, 0.66, 0.72, 0.78, 0.85, 0.90, 0.92, 0.94, 0.95, 0.97, 1.00, 1.00, 1.00, 0.98, 0.90, 0.72, 0.55],
+    flat:    [0.85, 0.84, 0.83, 0.83, 0.83, 0.85, 0.88, 0.92, 0.95, 0.97, 0.98, 1.00, 1.00, 1.00, 1.00, 0.99, 0.98, 0.97, 0.96, 0.95, 0.93, 0.90, 0.88, 0.86]
+  };
+  const CLASSN = { res: 'residential', office: 'office', hotel: 'hotel', retail: 'retail / mixed', theater: 'theater', flat: 'flat 24 h' };
+  function classOf(desc) {
+    const d = desc.toLowerCase();
+    if (d.includes('telecom') || d.includes('parking')) return 'flat';
+    if (d.includes('theater district')) return 'theater';
+    if (d.includes('hotel')) return 'hotel';
+    if (d.includes('office')) return 'office';
+    if (d.startsWith('residential')) return 'res';
+    return 'retail';
+  }
+  const CLASS = Object.fromEntries(M.loads.map(L => [L.node, classOf(L.desc)]));
+  const PV_SUMMER = [0, 0, 0, 0, 0, 0.02, 0.07, 0.17, 0.31, 0.45, 0.57, 0.66, 0.70, 0.69, 0.63, 0.53, 0.40, 0.26, 0.13, 0.04, 0, 0, 0, 0].map(x => x * 0.85);
+  const PV_SPRING = [0, 0, 0, 0, 0, 0, 0.02, 0.09, 0.20, 0.32, 0.41, 0.47, 0.49, 0.47, 0.41, 0.31, 0.19, 0.08, 0.02, 0, 0, 0, 0, 0];
+  const PV_SHOULDER = PV_SPRING.map(x => x * 1.63);      // clear, cool spring / fall day: near-nameplate midday output
+  const PV_WINTER = PV_SPRING.map(x => x * 0.51);        // short, often overcast winter day
+  const EVSHAPE = [0.15, 0.10, 0.08, 0.08, 0.10, 0.20, 0.35, 0.50, 0.55, 0.50, 0.45, 0.45, 0.50, 0.50, 0.55, 0.65, 0.80, 0.95, 1.00, 0.95, 0.80, 0.60, 0.40, 0.25];
+  // light-load day: LTC set point lowered by line-drop compensation (vr = fractional reduction of 1.05 pu)
+  const SEASONS = {
+    summer:   { label: 'Summer peak day', short: 'Summer', days: 122, scale: 1.0, vr: 0, pv: PV_SUMMER },
+    shoulder: { label: 'Clear spring / fall light-load day', short: 'Light-load', days: 90, scale: 0.5, vr: 0.02, pv: PV_SHOULDER },
+    winter:   { label: 'Winter / overcast day', short: 'Winter', days: 153, scale: 0.65, vr: 0.01, pv: PV_WINTER }
+  };
+  const HOURS = [...Array(24).keys()];
+  const LS = {};
+  for (const se in SEASONS) LS[se] = HOURS.map(h => Object.fromEntries(M.loads.map(L => [L.node, SHAPES[CLASS[L.node]][h] * SEASONS[se].scale])));
+  const netLoad = (se, h) => M.loads.reduce((a, L) => a + L.kw * LS[se][h][L.node], 0);
+  const PEAK_H = HOURS.reduce((b, h) => netLoad('summer', h) > netLoad('summer', b) ? h : b, 0);
+  const LIGHT_H = [10, 11, 12, 13, 14].reduce((b, h) => netLoad('shoulder', h) < netLoad('shoulder', b) ? h : b, 12);
+  const CASES = {
+    light: { key: 'light', label: 'Light load · DER at nameplate', short: 'Light load', season: 'shoulder', h: LIGHT_H, gen: true },
+    peak:  { key: 'peak', label: 'Summer peak · generation not credited', short: 'Summer peak', season: 'summer', h: PEAK_H, gen: false }
+  };
+  const LIGHT_KW = netLoad('shoulder', LIGHT_H), PEAK_KW = netLoad('summer', PEAK_H);
+  const topHours = (arr, n, from = 0) => arr.map((v, h) => [v, h]).filter(x => x[1] >= from).sort((a, b) => b[0] - a[0]).slice(0, n).map(x => x[1]);
+  const PEAK4 = {}, EVE4 = {};
+  for (const c in SHAPES) { PEAK4[c] = topHours(SHAPES[c], 4); EVE4[c] = topHours(SHAPES[c], 4, 16); }
+  const PVTOP = { summer: topHours(PV_SUMMER, 4), shoulder: topHours(PV_SHOULDER, 4), winter: topHours(PV_WINTER, 4) };
+  const hh = (h) => String(h).padStart(2, '0') + ':00';
+
+  /* ============================== DER catalogue ============================== */
+  const GEN_IC = ['export', 'pcs', 'flex', 'mir', 'nonexport', 'primary'];
+  const TYPES = {
+    pv:     { name: 'Solar PV', code: 'PV', col: '#f2c94c', inv: true, capex: 3200, def: 300, max: 2500, ic: GEN_IC, unit: 'kW AC' },
+    bess:   { name: 'Battery storage · 4 h', code: 'ES', col: '#6aa8ff', inv: true, capex: 2100, def: 500, max: 3000, ic: GEN_IC, unit: 'kW / 4 h' },
+    pvbess: { name: 'Solar + storage', code: 'PV+S', col: '#9ee06a', inv: true, capex: 4250, def: 400, max: 2500, ic: GEN_IC, unit: 'kW PV · 50 % / 4 h' },
+    chp:    { name: 'CHP · gas engine', code: 'CHP', col: '#ff8a65', inv: false, capex: 3000, def: 600, max: 2500, ic: ['nonexport', 'mir', 'flex', 'export', 'primary'], unit: 'kW' },
+    fc:     { name: 'Fuel cell', code: 'FC', col: '#b897ff', inv: true, capex: 7000, def: 400, max: 2000, ic: GEN_IC, unit: 'kW' },
+    ev:     { name: 'EV fast-charging hub', code: 'EV', col: '#ff7eb6', load: true, capex: 900, def: 1000, max: 3000, ic: ['firm', 'ems', 'flexload'], unit: 'kW charging' }
+  };
+  const IC = {
+    export:    { name: 'Full export · net metering', short: 'Full export', cost: 15000, months: 0,
+      desc: 'UL 1741 SB / IEEE 1547-2018 inverter exports every surplus kW. Cheapest, but surplus flows backward through the network protectors.' },
+    pcs:       { name: 'Limited export · power control system', short: 'PCS export cap', cost: 18000, months: 0, cap: 'Export cap',
+      desc: 'A UL 1741 CRD power control system holds export at the meter to a fixed cap.' },
+    flex:      { name: 'Flexible interconnection · DERMS', short: 'Flexible (DERMS)', cost: 65000, months: 2,
+      desc: 'The utility DERMS sends a dynamic export limit so protectors stay forward and voltage stays in range. It curtails only when the network needs it.' },
+    mir:       { name: 'Minimum import relay', short: 'Min. import (MIR)', cost: 48000, months: 1,
+      desc: 'Output is held so the site always imports at least 10 % of its load. The site never backfeeds the network.' },
+    nonexport: { name: 'Non-export · reverse power relay (32R)', short: 'Non-export (32R)', cost: 42000, months: 1,
+      desc: 'A reverse-power relay at the service. Output is held to site load with zero export.' },
+    primary:   { name: 'Primary 13.8 kV · dedicated transformer', short: 'Primary 13.8 kV', cost: 1350000, months: 20,
+      desc: 'A dedicated transformer and 13.8 kV switchgear tapped off the host vault feeder. Export bypasses the secondary network but needs transfer-trip protection.' },
+    firm:      { name: 'Firm service · unmanaged charging', short: 'Firm service', cost: 0, months: 0,
+      desc: 'Full charging capacity at every hour. The network must carry the coincident peak.' },
+    ems:       { name: 'Load management system (EMS)', short: 'EMS cap', cost: 22000, months: 0, cap: 'Charging cap',
+      desc: 'An on-site energy management system (NEC 625.42 / Article 750) caps total charging at a set kW.' },
+    flexload:  { name: 'Flexible connection · DERMS peak management', short: 'Flexible load', cost: 60000, months: 2,
+      desc: 'The utility DERMS curtails charging only when the host network would exceed ratings or voltage limits.' }
+  };
+  const INVF = { unity: 'Unity power factor', pf95: 'Fixed 0.95 PF absorbing', vv: 'Volt-VAR · IEEE 1547 Cat B' };
+  const UPG = {
+    ntx:    { name: 'Replace network transformer with 1,500 kVA unit', cost: 780000, months: 20 },
+    main:   { name: 'Add parallel secondary main section', cost: 220000, months: 9 },
+    feeder: { name: 'Reconductor 13.8 kV feeder section', cost: 1100000, months: 18 },
+    fault:  { name: 'Fault-current mitigation (current-limiting reactor, duty review)', cost: 300000, months: 12 },
+    vsup:   { name: 'Voltage support: added network transformer', cost: 780000, months: 20 }
+  };
+  const LIMITS = { vmax: 126, vmin: 114, nt: 100, mainA: 2400, feederA: 380, dv: 3, dvWarn: 5, fault: 10, pen: 25 };
+
+  /* ============================== network solve ============================== */
+  const BASE = E.createState(M);
+  const BASE_TOPO = E.topology(M, BASE);
+  function solve(ls, vr, items, open) {
+    const sw = {};
+    for (const k in BASE.sw) sw[k] = { ...BASE.sw[k] };
+    if (open) for (const vid of open) sw['NP' + vkey(vid)].closed = false;
+    const st = { sw, faults: {}, load: 1, vr, dr: false, failed: {}, loadScale: ls, gen: items };
+    const topo = E.topology(M, st), pf = E.powerFlow(M, st, topo, 1);
+    const V = {}, nt = {}, rev = [];
+    let minV = Infinity, maxV = -Infinity, maxNT = 0, maxNTid = '', dead = 0, maxA = 0, maxAid = '', maxFA = 0, maxFid = '', minP = Infinity;
+    for (const g of M.gridNodes) {
+      const v = pf.nodeV[M.nIndex.get(g.id)];
+      if (!v) { V[g.id] = null; dead++; continue; }
+      const x = Math.hypot(v[0][0], v[0][1]) * 120; V[g.id] = x;
+      if (x < minV) minV = x; if (x > maxV) maxV = x;
+    }
+    for (const v of M.vaults) {
+      const r = pf.brRes[v.tr], closed = sw[v.np].closed;
+      const P = r && closed ? r.S[0][0] * 1000 : 0, pct = r && closed ? Math.hypot(r.I[0][0], r.I[0][1]) * 100 : 0;
+      nt[v.id] = { P, pct, open: !closed };
+      if (closed && P < -1) rev.push(v.id);
+      if (closed && P < minP) minP = P;
+      if (pct > maxNT) { maxNT = pct; maxNTid = v.id; }
+    }
+    for (const b of M.mains) { const r = pf.brRes[b.id]; const a = r ? Math.hypot(r.I[0][0], r.I[0][1]) * 1000 / (Math.sqrt(3) * 0.208) : 0; if (a > maxA) { maxA = a; maxAid = b.id; } }
+    for (const f of M.feeders) { const r = pf.brRes[f.segs[0]]; const a = r ? Math.hypot(r.I[0][0], r.I[0][1]) * 1000 / (Math.sqrt(3) * 13.8) : 0; if (a > maxFA) { maxFA = a; maxFid = f.id; } }
+    const vpu = (id) => { const v = pf.nodeV[M.nIndex.get(id)]; return v ? Math.hypot(v[0][0], v[0][1]) : null; };
+    return { V, nt, rev, minP, minV: isFinite(minV) ? minV : 0, maxV: isFinite(maxV) ? maxV : 0, maxNT, maxNTid, dead, maxA, maxAid, maxFA, maxFid, vpu, pf, open: open || [] };
+  }
+  // strict = DERMS operating margin: protectors held at least 15 kW forward, voltage 0.3 V below the limit
+  const okGen = (r, strict) => (strict ? r.minP >= 15 && r.maxV <= LIMITS.vmax - 0.3 : !r.rev.length && r.maxV <= LIMITS.vmax)
+    && r.maxNT <= LIMITS.nt && r.maxA <= LIMITS.mainA && r.maxFA <= LIMITS.feederA && !r.dead;
+  // relative to an existing condition b: no new reverse protectors and no worsening of a limit already exceeded
+  const okRel = (r, b) => r.rev.every(v => b.rev.includes(v)) && r.maxV <= Math.max(LIMITS.vmax, b.maxV + 0.02) && r.maxNT <= Math.max(LIMITS.nt, b.maxNT + 0.2)
+    && r.maxA <= Math.max(LIMITS.mainA, b.maxA + 1) && r.maxFA <= Math.max(LIMITS.feederA, b.maxFA + 0.5) && !r.dead;
+  const okLoad = (r) => r.maxNT <= LIMITS.nt && r.minV >= LIMITS.vmin && r.maxA <= LIMITS.mainA && r.maxFA <= LIMITS.feederA && !r.dead;
+
+  // reverse power: protectors trip, the network re-solves, more may trip
+  function cascade(ls, vr, items) {
+    const open = [];
+    let r = solve(ls, vr, items), first = r.rev.slice();
+    for (let k = 0; k < 10 && r.rev.length; k++) { open.push(...r.rev); r = solve(ls, vr, items, open); }
+    return { first, open, res: r };
+  }
+
+  /* ============================== dispatch ============================== */
+  const injNode = (p) => p.ic === 'primary' ? 'P' + vkey(HOSTV[p.node]) : p.node;
+  const isFlex = (p) => p.ic === 'flex' || p.ic === 'flexload';
+  function inj(p, o, static_) {
+    const T = TYPES[p.type];
+    let q = 0;
+    if (T.load) q = o * 0.2;                                     // chargers draw ~0.98 pf
+    else if (T.inv && o > 0 && p.inv === 'pf95') q = -0.3287 * o;
+    return { node: injNode(p), p: o, q, vv: !static_ && T.inv && p.inv === 'vv' && !T.load, qmax: 0.44 * 1.1 * p.kw };
+  }
+  const vvCurve = (v) => v <= 0.92 ? 1 : v < 0.98 ? (0.98 - v) / 0.06 : v <= 1.02 ? 0 : v < 1.08 ? -(v - 1.02) / 0.06 : -1;
+  function solveQ(ls, vr, items) {
+    let r = solve(ls, vr, items);
+    if (!items.some(i => i.vv)) return r;
+    for (let it = 0; it < 3; it++) {
+      for (const i of items) if (i.vv) { const q = vvCurve(r.vpu(i.node) || 1) * i.qmax; i.q = it ? 0.5 * (i.q + q) : q; }
+      r = solve(ls, vr, items);
+    }
+    return r;
+  }
+  function avail(p, se, h) {
+    const k = p.kw, S = SEASONS[se], c = CLASS[p.node];
+    switch (p.type) {
+      case 'pv': return k * S.pv[h];
+      case 'chp': return k * (h >= 7 && h <= 22 ? 1 : 0.6);
+      case 'fc': return k * 0.95;
+      case 'ev': return -k * EVSHAPE[h];
+      case 'bess': return PEAK4[c].includes(h) ? 0.9 * k : (h >= 1 && h <= 4 ? -k : 0);
+      case 'pvbess': {
+        const pv = k * S.pv[h], kb = 0.5 * k;
+        const ech = PVTOP[se].reduce((a, x) => a + Math.min(kb, k * S.pv[x]), 0);
+        return pv - (PVTOP[se].includes(h) ? Math.min(kb, pv) : 0) + (EVE4[c].includes(h) ? Math.min(kb, 0.9 * ech / 4) : 0);
+      }
+    }
+    return 0;
+  }
+  // planning cases: generation at nameplate in the light-load case and not credited at peak; storage is
+  // credited at peak under a firm peak-shaving schedule (0.9 x rating); charging loads at full rating at peak
+  function caseAvail(p, c) {
+    if (TYPES[p.type].load) return c.gen ? 0 : -p.kw;
+    if (p.type === 'bess') return c.gen ? p.kw : 0.9 * p.kw;
+    return c.gen ? p.kw : 0;
+  }
+  function control(p, a, s) {
+    if (a <= 0) return p.ic === 'ems' ? Math.max(a, -p.cap) : a;
+    const site = Math.max(0, s);
+    switch (p.ic) {
+      case 'pcs': return Math.min(a, site + p.cap);
+      case 'mir': return Math.min(a, 0.9 * site);
+      case 'nonexport': return Math.min(a, site);
+      case 'flex': return Math.min(a, site);       // floor; the DERMS search raises it
+      default: return a;
+    }
+  }
+  function flexSearch(p, a, s, ls, vr, fixed) {
+    const test = (x) => { const r = solve(ls, vr, fixed.concat([inj(p, x, true)])); return TYPES[p.type].load ? okLoad(r) : okGen(r, true); };
+    if (TYPES[p.type].load) {
+      if (a >= 0 || test(a)) return a;
+      let lo = 0, hi = a;
+      for (let i = 0; i < 9; i++) { const m = (lo + hi) / 2; if (test(m)) lo = m; else hi = m; }
+      return lo;
+    }
+    // DERMS may curtail all the way to zero, even below site load, when the network needs it
+    let lo = 0, hi = a;
+    if (hi <= 0 || test(hi)) return hi;
+    if (!test(lo)) return 0;
+    for (let i = 0; i < 9; i++) { const m = (lo + hi) / 2; if (test(m)) lo = m; else hi = m; }
+    return lo;
+  }
+  function dispatch(list, ls, vr, getA) {
+    const site = {}, out = new Map();
+    for (const L of M.loads) site[L.node] = L.kw * ls[L.node];
+    const step = (p, o, a, s) => { out.set(p.id, { a, o, s }); if (p.ic !== 'primary') site[p.node] -= o; };
+    for (const p of list) if (!isFlex(p)) { const a = getA(p), s = site[p.node]; step(p, p.ic === 'primary' ? a : control(p, a, s), a, s); }
+    for (const p of list) if (isFlex(p)) {
+      const a = getA(p), s = site[p.node];
+      const fixed = list.filter(q => out.has(q.id)).map(q => inj(q, out.get(q.id).o, true));
+      step(p, a === 0 ? 0 : flexSearch(p, a, s, ls, vr, fixed), a, s);
+    }
+    const items = list.map(p => inj(p, out.get(p.id).o));
+    return { out, items, res: solveQ(ls, vr, items) };
+  }
+
+  /* ============================== studies ============================== */
+  let memo = new Map();
+  const sig = (list) => list.map(p => [p.id, p.node, p.type, p.kw, p.ic, p.cap, p.inv].join(',')).join('|');
+  function caseRun(list, key) {
+    const k = key + '#' + sig(list);
+    if (!memo.has(k)) { const c = CASES[key]; memo.set(k, dispatch(list, LS[c.season][c.h], SEASONS[c.season].vr, (p) => caseAvail(p, c))); }
+    return memo.get(k);
+  }
+  function simulate(list) {
+    const k = 'sim#' + sig(list);
+    if (memo.has(k)) return memo.get(k);
+    const H = {};
+    for (const se in SEASONS) H[se] = HOURS.map(h => { const d = dispatch(list, LS[se][h], SEASONS[se].vr, (p) => avail(p, se, h)); return { out: d.out, res: d.res }; });
+    memo.set(k, H);
+    return H;
+  }
+  function energy(p, H) {
+    const e = { avail: 0, del: 0, chg: 0, curt: 0, exp: 0, demand: 0, served: 0, peakBefore: 0, peakAfter: 0, revH: 0 };
+    for (const se in SEASONS) {
+      const days = SEASONS[se].days;
+      H[se].forEach((x, h) => {
+        const r = x.out.get(p.id); if (!r) return;
+        const { a, o, s } = r;
+        if (TYPES[p.type].load) { e.demand += -a * days; e.served += -o * days; }
+        else {
+          if (a > 0) { e.avail += a * days; e.curt += Math.max(0, a - o) * days; }
+          if (o > 0) e.del += o * days; else e.chg += -o * days;
+          e.exp += (p.ic === 'primary' ? Math.max(0, o) : Math.max(0, o - Math.max(0, s))) * days;
+        }
+        if (se === 'summer') { e.peakBefore = Math.max(e.peakBefore, s); e.peakAfter = Math.max(e.peakAfter, p.ic === 'primary' ? s : s - o); }
+        if (x.res.rev.length) e.revH += days;
+      });
+    }
+    return e;
+  }
+  function sources(list) {
+    return list.filter(p => !TYPES[p.type].load).map(p => TYPES[p.type].inv
+      ? { node: injNode(p), kind: 'inv', kva: p.kw, ixf: 1.2 }
+      : { node: injNode(p), kind: 'sync', kva: p.kw / 0.9, xd: 0.16 });
+  }
+  const exportCap = (p) => TYPES[p.type].load ? 0 : p.ic === 'export' || p.ic === 'flex' ? p.kw : p.ic === 'pcs' ? Math.min(p.kw, p.cap) : 0;
+
+  function screen(list, j) {
+    // studied with every earlier queue position plus anything co-located at the same site (one application)
+    const p = list[j], T = TYPES[p.type], load = !!T.load;
+    const pre = list.filter((q, k) => k <= j || q.node === p.node), wo = pre.filter(q => q !== p);
+    const lw = caseRun(pre, 'light'), pw = caseRun(pre, 'peak'), lo = caseRun(wo, 'light'), po = caseRun(wo, 'peak');
+    const rows = [], upg = [];
+    const row = (id, name, crit, result, st, why) => rows.push({ id, name, crit, result, st, why });
+    // 1 protector reverse power
+    if (load) row('np', 'Network protector reverse power', 'No protector reverses at light load', 'Load project — no export', 'na');
+    else if (lw.res.rev.length) {
+      const c = cascade(LS.shoulder[LIGHT_H], SEASONS.shoulder.vr, lw.items.map(i => ({ ...i })));
+      row('np', 'Network protector reverse power', 'No protector reverses at light load',
+        `${lw.res.rev.length} reverse (${lw.res.rev.map(vkey).join(', ')}) · cascade opens ${c.open.length}${c.res.dead ? ' and drops the network' : ''}`, 'fail', 'block');
+    } else {
+      const minP = Math.min(...M.vaults.map(v => lw.res.nt[v.id].P));
+      row('np', 'Network protector reverse power', 'No protector reverses at light load', `All ${M.vaults.length} forward · lowest ${f0(minP)} kW`, minP < 40 ? 'warn' : 'pass');
+    }
+    // 2 steady-state voltage
+    const hiV = lw.res.maxV, loV = pw.res.minV;
+    const vst = hiV > LIMITS.vmax || loV < LIMITS.vmin ? 'fail' : hiV > LIMITS.vmax - 0.6 ? 'warn' : 'pass';
+    row('vss', 'Steady-state voltage', '114–126 V (ANSI C84.1 Range A)', `Light max ${f1(hiV)} V · peak min ${f1(loV)} V`, vst, hiV > LIMITS.vmax ? 'block' : loV < LIMITS.vmin ? 'vsup' : null);
+    // 3 voltage change
+    let dv;
+    if (load) { const a = po.res.V[p.node], b = pw.res.V[p.node]; dv = a && b ? (a - b) / a * 100 : 0; }
+    else {
+      const jj = pre.indexOf(p), items = lw.items.map((i, k) => k === jj ? { ...i, p: 0, q: 0, vv: false } : { ...i, vv: false });
+      const tr = solve(LS.shoulder[LIGHT_H], SEASONS.shoulder.vr, items);
+      const n = injNode(p), a = lw.res.vpu(n), b = tr.vpu(n); dv = a && b ? (a - b) / b * 100 : 0;
+    }
+    row('dv', load ? 'Voltage drop at peak' : 'Voltage change on DER trip', `≤ ${LIMITS.dv} % (≤ ${LIMITS.dvWarn} % infrequent)`, `${f2(Math.abs(dv))} % at the point of interconnection`,
+      Math.abs(dv) > LIMITS.dvWarn ? 'fail' : Math.abs(dv) > LIMITS.dv ? 'warn' : 'pass', Math.abs(dv) > LIMITS.dvWarn ? 'block' : null);
+    // 4 thermal
+    const over = [], tag = [];
+    for (const [c, r] of [['light', lw.res], ['peak', pw.res]]) {
+      for (const v of M.vaults) if (r.nt[v.id].pct > LIMITS.nt && !over.includes(v.id)) { over.push(v.id); tag.push(`${v.tr} ${f0(r.nt[v.id].pct)} % (${CASES[c].short.toLowerCase()})`); }
+    }
+    const mainsOver = Math.max(lw.res.maxA, pw.res.maxA) > LIMITS.mainA, feedOver = Math.max(lw.res.maxFA, pw.res.maxFA) > LIMITS.feederA;
+    if (mainsOver) tag.push(`secondary main ${f0(Math.max(lw.res.maxA, pw.res.maxA))} A`);
+    if (feedOver) tag.push(`feeder ${f0(Math.max(lw.res.maxFA, pw.res.maxFA))} A`);
+    const thMax = Math.max(lw.res.maxNT, pw.res.maxNT);
+    row('th', 'Thermal loading', 'Transformers ≤ 100 %, mains ≤ 2,400 A, feeders ≤ 380 A',
+      tag.length ? tag.join(' · ') : `Heaviest transformer ${f0(thMax)} % (${vkey(lw.res.maxNT > pw.res.maxNT ? lw.res.maxNTid : pw.res.maxNTid)})`,
+      tag.length ? 'fail' : thMax > 90 ? 'warn' : 'pass');
+    over.forEach(v => upg.push({ ...UPG.ntx, name: `${UPG.ntx.name} (${vaultById(v).tr})` }));
+    if (mainsOver) upg.push(UPG.main);
+    if (feedOver) upg.push(UPG.feeder);
+    if (vst === 'fail' && loV < LIMITS.vmin && !over.length) upg.push(UPG.vsup);
+    // 5 fault current
+    let fc = null;
+    if (load) row('sc', 'Fault current contribution', `≤ ${LIMITS.fault} % of available fault current`, 'Load project — no contribution', 'na');
+    else {
+      const n = injNode(p), w = E.shortCircuit(M, BASE, BASE_TOPO, sources(pre), [n])[n], o = E.shortCircuit(M, BASE, BASE_TOPO, sources(wo), [n])[n];
+      const add = w.total - o.total, pct = add / w.grid * 100;
+      fc = { grid: w.grid, add, pct, total: w.total, kv: n.startsWith('P') ? 13.8 : 0.208 };
+      row('sc', 'Fault current contribution', `≤ ${LIMITS.fault} % of available fault current`, `+${f2(add)} kA on ${f1(w.grid)} kA available (${f1(pct)} %)`, pct > LIMITS.fault ? 'fail' : pct > LIMITS.fault * 0.7 ? 'warn' : 'pass');
+      if (pct > LIMITS.fault) upg.push(UPG.fault);
+    }
+    // 6 penetration
+    if (load) row('pen', 'Network penetration', `Export-capable DER ≤ ${LIMITS.pen} % of light-load demand`, 'Load project', 'na');
+    else {
+      const agg = pre.reduce((a, q) => a + exportCap(q), 0), pct = agg / LIGHT_KW * 100;
+      row('pen', 'Network penetration', `Export-capable DER ≤ ${LIMITS.pen} % of light-load demand`, `${f0(agg)} kW = ${f1(pct)} % of ${f0(LIGHT_KW)} kW`, pct > LIMITS.pen ? 'warn' : 'pass');
+    }
+    // 7 protection
+    if (load) row('prot', 'Protection & anti-islanding', 'Certified equipment or relay review', 'Load — utility service protection only', 'pass');
+    else if (p.ic === 'primary') row('prot', 'Protection & anti-islanding', 'Certified equipment or relay review', '13.8 kV: direct transfer trip, recloser and relay coordination study', 'warn');
+    else if (!T.inv) row('prot', 'Protection & anti-islanding', 'Certified equipment or relay review', 'Synchronous machine: utility relay package (25, 27/59, 81 O/U, 32, 51V) review', 'warn');
+    else row('prot', 'Protection & anti-islanding', 'Certified equipment or relay review', 'UL 1741 SB inverter · IEEE 1547-2018 Cat B / III', 'pass');
+
+    const fails = rows.filter(r => r.st === 'fail'), warns = rows.filter(r => r.st === 'warn');
+    const blocked = fails.some(r => r.why === 'block') || rows.some(r => r.id === 'np' && r.st === 'fail');
+    const verdict = blocked ? 'block' : fails.length ? 'upg' : 'ok';
+    const icm = IC[p.ic].months, upgM = upg.reduce((a, u) => Math.max(a, u.months), 0);
+    let path, months;
+    if (verdict === 'block') { path = 'Fails screening — redesign required'; months = null; }
+    else if (verdict === 'upg' || p.kw > 2000 || (!T.inv && p.ic === 'export')) { path = 'Detailed impact study'; months = 10 + Math.max(icm, upgM); }
+    else if (warns.length || p.kw > 300 || !T.inv) { path = 'Supplemental review'; months = 5 + icm; }
+    else { path = 'Fast track'; months = 2 + icm; }
+    const icCost = IC[p.ic].cost, upCost = upg.reduce((a, u) => a + u.cost, 0);
+    return { rows, upg, verdict, path, months, icCost, upCost, capex: p.kw * T.capex, fc, lw, pw, dv };
+  }
+
+  // remaining hosting capacity for full-export PV at every site, given the committed queue
+  function hostingCapacity(list) {
+    const k = 'hc#' + sig(list);
+    if (memo.has(k)) return memo.get(k);
+    const ls = LS.shoulder[LIGHT_H], vr = SEASONS.shoulder.vr, base = caseRun(list, 'light').items.map(i => ({ ...i, vv: false }));
+    const out = {}, b0 = solve(ls, vr, base), ok = (r) => okGen(b0) ? okGen(r) : okRel(r, b0);
+    for (const g of M.gridNodes) {
+      const test = (x) => solve(ls, vr, base.concat([{ node: g.id, p: x, q: 0 }]));
+      let lo = 0, hi = 4000;
+      for (let i = 0; i < 12; i++) { const m = (lo + hi) / 2; if (ok(test(m))) lo = m; else hi = m; }
+      out[g.id] = { kw: Math.floor(lo / 5) * 5, limit: limitOf(test(hi)) };
+    }
+    memo.set(k, out);
+    return out;
+  }
+  function limitOf(r) {
+    if (r.rev.length) return `Reverse power at ${r.rev.map(vkey).join(', ')}`;
+    if (r.maxV > LIMITS.vmax) return 'Voltage above 126 V';
+    if (r.maxNT > LIMITS.nt) return `${vaultById(r.maxNTid).tr} thermal`;
+    if (r.maxA > LIMITS.mainA) return 'Secondary main thermal';
+    if (r.maxFA > LIMITS.feederA) return 'Feeder thermal';
+    return '—';
+  }
+
+  /* ============================== app state ============================== */
+  let projects = [], nextId = 1;
+  let sel = null;                 // { t: 'site'|'proj', id }
+  let draft = { type: 'pv', kw: 300, ic: 'export', cap: 75, inv: 'unity' };
+  let mapCase = 'light', profSeason = 'shoulder';
+  let R = null;                   // last study
+  let G = null;                   // active challenge
+  let chMin = false;
+  try { chMin = localStorage.getItem('gridgame.der.chMin') === '1'; } catch (e) { /* storage unavailable */ }
+
+  const selProj = () => sel && sel.t === 'proj' ? projects.find(p => p.id === sel.id) : null;
+  const draftProj = () => sel && sel.t === 'site' ? { ...draft, id: 'draft', node: sel.id } : null;
+  const studyList = () => { const d = draftProj(); return d ? projects.concat([d]) : projects.slice(); };
+  const focusId = () => sel ? (sel.t === 'proj' ? sel.id : 'draft') : null;
+
+  /* ============================== recalc ============================== */
+  let timer = 0, optTimer = 0;
+  function schedule(ms = 40) { clearTimeout(timer); timer = setTimeout(recalc, ms); $('scmeta').textContent = 'solving…'; }
+  function recalc() {
+    if (memo.size > 400) memo = new Map();
+    const list = studyList();
+    const H = simulate(list);
+    const cases = { light: caseRun(list, 'light'), peak: caseRun(list, 'peak') };
+    const L = cases.light;
+    const casc = L.res.rev.length ? cascade(LS.shoulder[LIGHT_H], SEASONS.shoulder.vr, L.items.map(i => ({ ...i }))) : null;
+    const scr = new Map(), en = new Map();
+    list.forEach((p, j) => { scr.set(p.id, screen(list, j)); en.set(p.id, energy(p, H)); });
+    // remaining hosting capacity counts only projects that could actually be approved
+    const hc = hostingCapacity(projects.filter(p => scr.get(p.id).verdict !== 'block'));
+    R = { list, H, cases, casc, scr, en, hc, opts: null };
+    render();
+    if (G) checkChallenge();
+    clearTimeout(optTimer); optTimer = setTimeout(computeOptions, 30);
+  }
+  function computeOptions() {
+    const id = focusId(); if (!R || !id) return;
+    const list = R.list, j = list.findIndex(p => p.id === id); if (j < 0) return;
+    const p = list[j], rows = [];
+    for (const ic of TYPES[p.type].ic) {
+      const q = { ...p, ic, cap: p.cap || Math.round(p.kw * 0.25) };
+      const alt = list.map((x, k) => k === j ? q : x);
+      const s = screen(alt, j), e = energy(q, simulate(alt));
+      rows.push({ ic, s, e, cur: ic === p.ic });
+    }
+    R.opts = { id, rows };
+    renderOptions();
+  }
+
+  /* ============================== rendering ============================== */
+  const ST = { pass: ['PASS', 'c-ok'], warn: ['REVIEW', 'c-warn'], fail: ['FAIL', 'c-crit'], na: ['N/A', 'c-dim'] };
+  const VERD = { ok: ['Passes screening', 'c-ok'], upg: ['Approvable with upgrades', 'c-warn'], block: ['Not approvable as proposed', 'c-crit'] };
+  const AVX = [-230, 0, 260, 520, 780, 1040];
+  function feederRoute(f, k) {
+    const pts = [[-280, 252 + k * 15]], o = (k - 2.5) * 5;
+    let py = pts[0][1];
+    for (const vid of f.vaults) { const v = vaultById(vid); pts.push([v.x + o, py], [v.x + o, v.y], [v.x, v.y]); py = v.y; }
+    return pts.map(p => p.join(',')).join(' ');
+  }
+  const hcCol = (kw) => kw >= 450 ? 'var(--ok)' : kw >= 200 ? 'var(--warn)' : 'var(--crit)';
+
+  function renderMap() {
+    const c = R.cases[mapCase], r = mapCase === 'light' && R.casc ? R.casc.res : c.res, first = mapCase === 'light' ? c.res.rev : [];
+    const h = [];
+    h.push(`<rect x="-470" y="-110" width="1330" height="870" fill="var(--street)"/>`);
+    h.push(`<rect x="-470" y="-110" width="80" height="870" fill="var(--water)"/><line x1="-390" y1="-110" x2="-390" y2="760" stroke="var(--waterline)" stroke-width="2"/>`);
+    h.push(`<text x="-432" y="330" fill="var(--faint)" font-size="13" letter-spacing="6" transform="rotate(-90 -432 330)" text-anchor="middle">HUDSON RIVER</text>`);
+    for (let i = 0; i < AVX.length - 1; i++) for (let y = -80; y < 720; y += 80)
+      h.push(`<rect x="${AVX[i] + 12}" y="${y + 7}" width="${AVX[i + 1] - AVX[i] - 24}" height="66" fill="var(--block)"/>`);
+    for (let st = 53, y = -80; st >= 43; st--, y += 80) h.push(`<text x="796" y="${y + 4}" fill="${st % 2 ? 'var(--faint)' : 'var(--dim)'}" font-size="12">W ${st}</text>`);
+    ['12 Av', '11 Av', '10 Av', '9 Av', '8 Av'].forEach((n, i) => h.push(`<text x="${AVX[i]}" y="-92" fill="var(--dim)" font-size="13" text-anchor="middle" letter-spacing="1">${n}</text>`));
+    for (const b of M.mains) {
+      const a = nodeOf(b.f), d = nodeOf(b.t), br = r.pf.brRes[b.id], live = !!br;
+      h.push(`<line x1="${a.x}" y1="${a.y}" x2="${d.x}" y2="${d.y}" stroke="${live ? 'var(--lv)' : 'var(--dead)'}" stroke-width="5" stroke-opacity="${live ? .5 : .8}" stroke-linecap="round"/>`);
+      if (live && Math.abs(br.S[0][0]) > 0.004) h.push(`<line class="flow${br.S[0][0] < 0 ? ' rev' : ''}" x1="${a.x}" y1="${a.y}" x2="${d.x}" y2="${d.y}" stroke="var(--lv)" stroke-width="2.5" stroke-linecap="round"/>`);
+    }
+    M.feeders.forEach((f, k) => {
+      const pts = feederRoute(f, k), back = r.pf.brRes[f.segs[0]] && r.pf.brRes[f.segs[0]].S[0][0] < 0;
+      h.push(`<polyline points="${pts}" fill="none" stroke="var(--mv)" stroke-width="1.8" stroke-opacity=".65" stroke-linejoin="round"/>`
+        + `<polyline class="flow${back ? ' rev' : ''}" points="${pts}" fill="none" stroke="var(--mv)" stroke-width="1.8"/>`
+        + `<text x="-271" y="${248 + k * 15}" fill="var(--mv)" font-size="10">${f.id}</text>`);
+    });
+    const sub = M.SUB;
+    h.push(`<rect x="${sub.x - 52}" y="${sub.y - 80}" width="104" height="160" fill="var(--panel2)" stroke="var(--rule2)"/>`
+      + `<text x="${sub.x}" y="${sub.y - 56}" fill="var(--text)" font-size="12" text-anchor="middle" font-weight="600">HUDSON</text>`
+      + `<text x="${sub.x}" y="${sub.y - 41}" fill="var(--dim)" font-size="10" text-anchor="middle">AREA SUB</text>`
+      + `<text x="${sub.x}" y="${sub.y + 66}" fill="var(--hv)" font-size="10" text-anchor="middle">138/13.8 kV</text>`);
+    for (const k of [1, 2]) { const y = sub.y - 22 + (k - 1) * 46; h.push(`<line x1="${sub.x - 38}" y1="${y}" x2="${sub.x + 38}" y2="${y}" stroke="var(--mv)" stroke-width="4"/><text x="${sub.x}" y="${y - 6}" fill="var(--dim)" font-size="9" text-anchor="middle">BUS ${k}</text>`); }
+    const hostSel = sel ? HOSTV[sel.t === 'site' ? sel.id : (selProj() || {}).node] : null;
+    for (const v of M.vaults) {
+      const n = nodeOf(v.node), x = r.nt[v.id], wasRev = first.includes(v.id), hot = x.pct > LIMITS.nt;
+      const col = wasRev || hot ? 'var(--crit)' : x.pct >= 90 ? 'var(--warn)' : 'var(--lv)', mx = (n.x + v.x) / 2, my = (n.y + v.y) / 2;
+      h.push(`<line x1="${n.x}" y1="${n.y}" x2="${v.x}" y2="${v.y}" stroke="${x.open ? 'var(--dead)' : 'var(--lv)'}" stroke-width="2"/>`
+        + `<rect x="${v.x - 12}" y="${v.y - 12}" width="24" height="24" fill="var(--panel)" stroke="${col}" stroke-width="${wasRev || hot ? 3 : 1.6}" ${wasRev ? 'class="blink"' : ''}/>`
+        + `<text x="${v.x}" y="${v.y + 4}" fill="${col}" font-size="9" text-anchor="middle">${wasRev ? 'REV' : x.open ? '—' : f0(x.pct)}</text>`
+        + `<rect x="${mx - 5}" y="${my - 5}" width="10" height="10" fill="${x.open ? 'var(--open)' : 'var(--closed)'}" stroke="var(--bg)" stroke-width="1.5"/>`
+        + (hostSel === v.id ? `<rect x="${v.x - 17}" y="${v.y - 17}" width="34" height="34" fill="none" stroke="var(--text)" stroke-dasharray="2 3"/>` : '')
+        + `<text x="${v.x}" y="${v.y + 26}" fill="${x.P < 0 ? 'var(--crit)' : 'var(--faint)'}" font-size="9" text-anchor="middle">${x.open ? 'open' : f0(x.P) + ' kW'}</text>`);
+    }
+    for (const g of M.gridNodes) {
+      const n = nodeOf(g.id), hc = R.hc[g.id], on = sel && sel.t === 'site' && sel.id === g.id, v = r.V[g.id];
+      const vcol = v == null ? 'var(--dead)' : v > LIMITS.vmax || v < LIMITS.vmin ? 'var(--crit)' : 'var(--text)';
+      h.push(`<g class="sel-hit" data-sel="site:${g.id}" role="button" aria-label="${esc(g.label)}"><circle cx="${n.x}" cy="${n.y}" r="16" fill="transparent"/>`
+        + `<circle cx="${n.x}" cy="${n.y}" r="11" fill="none" stroke="${hcCol(hc.kw)}" stroke-width="3" stroke-opacity=".85"/>`
+        + `<circle cx="${n.x}" cy="${n.y}" r="6" fill="${v == null ? 'var(--dead)' : 'var(--lv)'}" stroke="var(--bg)" stroke-width="2"/>`
+        + (on ? `<circle cx="${n.x}" cy="${n.y}" r="17" fill="none" stroke="var(--text)" stroke-dasharray="3 3"/>` : '')
+        + `<text x="${n.x - 15}" y="${n.y - 14}" fill="${hcCol(hc.kw)}" font-size="9" text-anchor="end">HC ${f0(hc.kw)}</text>`
+        + `<text x="${n.x - 15}" y="${n.y + 21}" fill="${vcol}" font-size="9" text-anchor="end">${v == null ? 'dead' : f1(v) + 'V'}</text></g>`);
+    }
+    // DER glyphs
+    const byNode = {};
+    for (const p of R.list) (byNode[p.node] = byNode[p.node] || []).push(p);
+    for (const id in byNode) {
+      const n = nodeOf(id);
+      byNode[id].forEach((p, i) => {
+        const T = TYPES[p.type], x = n.x + 16, y = n.y - 30 - i * 17, w = 36 + (T.code.length > 3 ? 8 : 0), on = sel && ((sel.t === 'proj' && sel.id === p.id) || (p.id === 'draft'));
+        const st = R.scr.get(p.id), bad = st && st.verdict === 'block';
+        h.push(`<g class="sel-hit" ${p.id === 'draft' ? '' : `data-sel="proj:${p.id}"`}>`
+          + (p.ic === 'primary' ? `<line x1="${x + w / 2}" y1="${y + 7}" x2="${vaultById(HOSTV[id]).x}" y2="${vaultById(HOSTV[id]).y - 12}" stroke="${T.col}" stroke-dasharray="3 3" stroke-width="1.5"/>` : '')
+          + `<rect x="${x}" y="${y - 6}" width="${w}" height="14" fill="${p.id === 'draft' ? 'var(--panel)' : T.col}" stroke="${bad ? 'var(--crit)' : on ? 'var(--text)' : T.col}" stroke-width="${bad || on ? 2 : 1}" ${p.id === 'draft' ? 'stroke-dasharray="3 2"' : ''}/>`
+          + `<text x="${x + w / 2}" y="${y + 4}" fill="${p.id === 'draft' ? T.col : '#0b1016'}" font-size="9" font-weight="600" text-anchor="middle">${T.code}</text>`
+          + `<text x="${x + w + 4}" y="${y + 4}" fill="var(--dim)" font-size="9">${f0(p.kw)}</text></g>`);
+      });
+    }
+    $('map').innerHTML = h.join('');
+    const cs = CASES[mapCase];
+    $('mapmeta').textContent = mapCase === 'light'
+      ? `${cs.label} · ${hh(cs.h)} · ${f1(LIGHT_KW / 1000)} MW` + (R.casc ? ` · ${R.casc.first.length} reverse → ${R.casc.open.length} protectors open${R.casc.res.dead ? ' · network collapses' : ''}` : '')
+      : `${cs.label} · ${hh(cs.h)} · ${f1(PEAK_KW / 1000)} MW`;
+  }
+
+  function renderProfile() {
+    const fp = R.list.find(p => p.id === focusId());
+    const node = fp ? fp.node : sel && sel.t === 'site' ? sel.id : null;
+    const svg = $('prof'), W = 720, Ht = 230, pl = 46, pr = 10, pt = 10, pb = 26;
+    if (!node) { svg.innerHTML = `<text x="${W / 2}" y="${Ht / 2}" fill="var(--dim)" font-size="12" text-anchor="middle" font-family="var(--f-body)">Select a site or project to see its 24-hour profile</text>`; $('plegend').innerHTML = ''; $('profmeta').textContent = ''; return; }
+    const se = profSeason, H = R.H[se], L = LOADOF[node], hv = HOSTV[node], here = R.list.filter(p => p.node === node);
+    const s = { load: [], avail: [], out: [], net: [], nt: [] };
+    HOURS.forEach(h => {
+      const base = L.kw * LS[se][h][node];
+      let a = 0, o = 0, bm = 0;
+      for (const p of here) { const x = H[h].out.get(p.id); if (!x) continue; a += x.a; o += x.o; if (p.ic !== 'primary') bm += x.o; }
+      s.load.push(base); s.avail.push(a); s.out.push(o); s.net.push(base - bm); s.nt.push(H[h].res.nt[hv].P);
+    });
+    const all = [].concat(...Object.values(s)), lo = Math.min(0, ...all), hi = Math.max(10, ...all), span = hi - lo || 1;
+    const X = (h) => pl + (W - pl - pr) * h / 23, Y = (v) => pt + (Ht - pt - pb) * (1 - (v - lo) / span);
+    const step = Math.pow(10, Math.floor(Math.log10(span / 4))), tick = [1, 2, 5, 10].map(m => m * step).find(t => span / t <= 6);
+    const g = [];
+    for (let v = Math.ceil(lo / tick) * tick; v <= hi; v += tick) g.push(`<line x1="${pl}" x2="${W - pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v === 0 ? 'var(--dim)' : 'var(--rule)'}" stroke-width="${v === 0 ? 1.2 : 1}"/><text x="${pl - 6}" y="${Y(v) + 3}" fill="var(--faint)" font-size="10" text-anchor="end">${f0(v)}</text>`);
+    HOURS.forEach(h => { if (s.nt[h] < -1) g.push(`<rect x="${X(Math.max(0, h - 0.5))}" y="${pt}" width="${X(Math.min(23, h + 0.5)) - X(Math.max(0, h - 0.5))}" height="${Ht - pt - pb}" fill="var(--crit)" fill-opacity=".14"/>`); });
+    for (let h = 0; h < 24; h += 3) g.push(`<text x="${X(h)}" y="${Ht - 8}" fill="var(--faint)" font-size="10" text-anchor="middle">${hh(h)}</text>`);
+    const line = (arr, col, w, dash) => `<polyline points="${arr.map((v, h) => X(h) + ',' + Y(v)).join(' ')}" fill="none" stroke="${col}" stroke-width="${w}" ${dash ? `stroke-dasharray="${dash}"` : ''} stroke-linejoin="round"/>`;
+    const tcol = fp ? TYPES[fp.type].col : 'var(--mv)';
+    const curt = HOURS.some(h => s.avail[h] - s.out[h] > 0.5);
+    if (here.length && curt) g.push(`<polygon points="${HOURS.map(h => X(h) + ',' + Y(s.avail[h])).join(' ')} ${HOURS.slice().reverse().map(h => X(h) + ',' + Y(s.out[h])).join(' ')}" fill="${tcol}" fill-opacity=".22"/>`);
+    g.push(line(s.load, 'var(--dim)', 1.5, '4 3'));
+    g.push(line(s.nt, 'var(--hv)', 1.6));
+    if (here.length) { g.push(line(s.avail, tcol, 1.2, '2 3')); g.push(line(s.out, tcol, 2.2)); g.push(line(s.net, 'var(--lv)', 2)); }
+    svg.innerHTML = g.join('');
+    $('plegend').innerHTML = `<span style="color:var(--dim)"><i class="dash" style="background:var(--dim)"></i>Site load (no DER)</span>`
+      + (here.length ? `<span style="color:${tcol}"><i class="dash"></i></span><span>DER available</span><span><i style="background:${tcol}"></i>DER output (− = charging)</span><span><i style="background:var(--lv)"></i>Net at meter (− = export)</span>` : '')
+      + `<span><i style="background:var(--hv)"></i>Host transformer ${hv.slice(1)} flow</span>`
+      + (curt ? `<span><b style="background:${tcol};opacity:.4"></b>Curtailed</span>` : '')
+      + `<span><b style="background:var(--crit);opacity:.35"></b>Reverse power hour</span>`;
+    $('profmeta').textContent = `${siteName(node)} · kW`;
+  }
+
+  function fieldsFor(t) {
+    const T = TYPES[t.type], ic = IC[t.ic];
+    return `<div class="fld"><span class="lab">Device</span><div class="typegrid">`
+      + Object.entries(TYPES).map(([k, x]) => `<button class="tbtn${t.type === k ? ' on' : ''}" data-type="${k}" style="${t.type === k ? `border-color:${x.col}` : ''}"><span class="code" style="color:${x.col}">${x.code}</span><span class="nm">${x.name}</span></button>`).join('')
+      + `</div></div>`
+      + `<div class="fld"><label for="f-kw">Size <span class="num" id="f-kwv">${f0(t.kw)} ${T.unit}</span></label><div class="sizerow"><input type="range" id="f-kw" min="25" max="${T.max}" step="25" value="${t.kw}" aria-label="Size in kW"><input type="number" id="f-kwn" min="25" max="${T.max}" step="25" value="${t.kw}" aria-label="Size in kW"></div></div>`
+      + `<div class="fld"><label for="f-ic">Interconnection option</label><select id="f-ic">${T.ic.map(k => `<option value="${k}" ${k === t.ic ? 'selected' : ''}>${IC[k].name}</option>`).join('')}</select><p class="note">${ic.desc}</p></div>`
+      + (ic.cap ? `<div class="fld"><label for="f-cap">${ic.cap} <span class="num" id="f-capv">${f0(t.cap)} kW</span></label><input type="range" id="f-cap" min="0" max="${t.kw}" step="5" value="${Math.min(t.cap, t.kw)}"></div>` : '')
+      + (T.inv && !T.load ? `<div class="fld"><label for="f-inv">Inverter function</label><select id="f-inv">${Object.entries(INVF).map(([k, v]) => `<option value="${k}" ${k === t.inv ? 'selected' : ''}>${v}</option>`).join('')}</select></div>` : '');
+  }
+  function renderBuilder() {
+    const el = $('builder');
+    if (el.contains(document.activeElement) && /^(INPUT)$/.test(document.activeElement.tagName)) { updateBuilderLive(); return; }
+    const p = selProj();
+    if (!sel) {
+      $('bmeta').textContent = '';
+      el.innerHTML = `<div class="brief"><h3>How to plan</h3><p class="note" style="margin:4px 0 10px">You are the DER planner for the same Midtown West network the ADMS operators run. Developers want to connect generation, storage and charging. On a secondary network, surplus power flowing backward trips the network protectors, so every option matters.</p><ol>
+        <li><b>Click a site</b> on the map. Its ring shows remaining hosting capacity for full-export solar.</li>
+        <li><b>Pick a device, a size and an interconnection option.</b> Results update as you change them.</li>
+        <li>Read the <b>screening results</b>, <b>planning outputs</b> and <b>hourly profile</b>, then compare every option in one table.</li>
+        <li><b>Add to queue</b> to commit it. Later projects are studied with the earlier ones in place.</li>
+        <li>Try a <b>planning challenge</b> for a scored brief.</li></ol></div>`;
+      return;
+    }
+    const t = p || draft, node = p ? p.node : sel.id, L = LOADOF[node], hv = vaultById(HOSTV[node]), hc = R.hc[node];
+    $('bmeta').textContent = p ? `project #${p.id} · in queue` : 'new project · preview';
+    el.innerHTML = `<div><h3>${esc(siteName(node))}</h3><div class="type">${esc(L.desc)} · ${CLASSN[CLASS[node]]} load · ${f0(L.kw)} kW summer peak · ${f0(L.cust)} customers · host vault ${hv.id.slice(1)} on ${hv.feeder}</div></div>`
+      + `<div class="hcbox"><span>Remaining hosting capacity · full-export PV</span><b id="b-hc">${f0(hc.kw)} kW</b></div>`
+      + fieldsFor(t)
+      + `<div class="btnrow">` + (p ? `<button class="btn danger" data-act="remove">Remove from queue</button><button class="btn" data-act="desel">Done</button>`
+        : `<button class="btn primary" data-act="add">Add to queue</button><button class="btn" data-act="desel">Cancel</button>`) + `</div>`;
+  }
+  function updateBuilderLive() { const hc = $('b-hc'), node = sel && (sel.t === 'site' ? sel.id : (selProj() || {}).node); if (hc && node) hc.textContent = f0(R.hc[node].kw) + ' kW'; }
+
+  function renderQueue() {
+    const list = R.list;
+    $('qmeta').textContent = `${projects.length} project${projects.length === 1 ? '' : 's'} · studied in order`;
+    $('queue').innerHTML = list.length ? list.map((p, i) => {
+      const T = TYPES[p.type], s = R.scr.get(p.id), v = VERD[s.verdict], on = focusId() === p.id;
+      return `<li class="${on ? 'on' : ''}${p.id === 'draft' ? ' draft' : ''}" ${p.id === 'draft' ? '' : `data-sel="proj:${p.id}"`}>`
+        + `<span class="qn">${p.id === 'draft' ? '+' : i + 1}</span><span class="qt" style="background:${T.col}">${T.code}</span>`
+        + `<span class="qs">${f0(p.kw)} kW · ${esc(siteName(p.node).replace(' & ', ' · '))}<span>${IC[p.ic].short}${p.id === 'draft' ? ' · preview' : ''}</span></span>`
+        + `<span class="pill ${v[1]}" title="${v[0]}">${s.verdict === 'ok' ? 'PASS' : s.verdict === 'upg' ? 'UPGR' : 'FAIL'}</span>`
+        + (p.id === 'draft' ? '<span></span>' : `<button class="x" data-del="${p.id}" aria-label="Remove project ${p.id}" title="Remove">×</button>`) + `</li>`;
+    }).join('') : `<li class="empty">No projects yet. Click a site on the map to start one.</li>`;
+  }
+
+  function renderScreens() {
+    const id = focusId(), s = id && R.scr.get(id);
+    if (!s) { $('screens').innerHTML = `<p class="empty-p">Select a site or project to screen it. Each project is studied with every earlier project in the queue already connected, and together with anything else proposed at the same site.</p>`; $('scmeta').textContent = ''; return; }
+    const p = R.list.find(x => x.id === id);
+    $('scmeta').textContent = `${TYPES[p.type].code} ${f0(p.kw)} kW · ${IC[p.ic].short}`;
+    $('screens').innerHTML = `<table class="tbl"><thead><tr><th>Screen</th><th>Result</th><th>Status</th></tr></thead><tbody>`
+      + s.rows.map(r => `<tr><td class="lab">${r.name}<span class="loc">${r.crit}</span></td><td class="l">${r.result}</td><td><span class="pill ${ST[r.st][1]}">${ST[r.st][0]}</span></td></tr>`).join('')
+      + `</tbody></table>`;
+  }
+
+  function renderOutputs() {
+    const id = focusId(), s = id && R.scr.get(id), el = $('outputs');
+    if (!s) { el.innerHTML = `<p class="note">Planning outputs appear here for the selected project: hosting capacity, energy, voltage, loading, fault duty, cost, study path and required equipment.</p>`; $('outmeta').textContent = ''; return; }
+    const p = R.list.find(x => x.id === id), T = TYPES[p.type], e = R.en.get(id), hv = HOSTV[p.node], v = VERD[s.verdict], load = !!T.load;
+    $('outmeta').textContent = `${TYPES[p.type].name} at ${siteName(p.node)}`;
+    const total = s.capex + s.icCost + s.upCost;
+    const lwn = s.lw.res.nt[hv], pwn = s.pw.res.nt[hv];
+    const reqs = [];
+    if (T.inv && !load) reqs.push('UL 1741 SB certified inverter, IEEE 1547-2018 Category B / III settings', `Inverter function: ${INVF[p.inv]}`);
+    if (!T.inv && !load) reqs.push('Utility-grade relay package: 25 sync-check, 27/59, 81 O/U, 32, 51V');
+    if (p.ic === 'nonexport') reqs.push('Reverse-power relay (32R) tripping the generator breaker');
+    if (p.ic === 'mir') reqs.push('Minimum-import relay set at 10 % of site load');
+    if (p.ic === 'pcs') reqs.push(`UL 1741 CRD power control system, export limit ${f0(p.cap)} kW`);
+    if (p.ic === 'flex') reqs.push('DERMS gateway, utility telemetry and dynamic export setpoint');
+    if (p.ic === 'primary') reqs.push('Dedicated 13.8 kV–480 V transformer and switchgear', 'Direct transfer trip from the feeder breaker');
+    if (p.ic === 'ems') reqs.push(`Load management system capped at ${f0(p.cap)} kW`);
+    if (p.ic === 'flexload') reqs.push('DERMS gateway with charging curtailment signal');
+    if (!load) reqs.push('Utility-accessible, lockable disconnect at the point of interconnection');
+    s.upg.forEach(u => reqs.push(`Upgrade: ${u.name} (${money(u.cost)}, ~${u.months} mo)`));
+    const eRows = load
+      ? `<dt>Charging energy requested</dt><dd>${f0(e.demand / 1000)} MWh/yr</dd><dt>Charging energy served</dt><dd>${f0(e.served / 1000)} MWh/yr</dd><dt>Charging curtailed</dt><dd class="${e.demand - e.served > 1 ? 'c-warn' : ''}">${f1((1 - e.served / Math.max(1, e.demand)) * 100)} %</dd>`
+      : `<dt>Energy available</dt><dd>${f0(e.avail / 1000)} MWh/yr</dd><dt>Energy delivered</dt><dd>${f0(e.del / 1000)} MWh/yr</dd>`
+        + (e.chg ? `<dt>Charging energy</dt><dd>${f0(e.chg / 1000)} MWh/yr</dd>` : '')
+        + `<dt>Exported to grid</dt><dd>${f0(e.exp / 1000)} MWh/yr</dd><dt>Curtailed by controls</dt><dd class="${e.curt / Math.max(1, e.avail) > 0.05 ? 'c-warn' : ''}">${f1(e.curt / Math.max(1, e.avail) * 100)} %</dd>`
+        + `<dt>Capacity factor</dt><dd>${f1(e.del / (p.kw * 8760) * 100)} %</dd>`;
+    el.innerHTML = `<div class="verdict ${v[1]}"><b>${v[0]}</b><span>${s.path}${s.months ? ` · indicative ${s.months}–${s.months + 3} months to energize` : ''}</span></div>`
+      + `<div class="ogrp"><h4>Hosting & network</h4><dl class="kv">`
+      + `<dt>Site hosting capacity (before)</dt><dd>${f0(R.hc[p.node].kw)} kW</dd><dt>Limiting criterion</dt><dd>${esc(R.hc[p.node].limit)}</dd>`
+      + `<dt>Voltage at site · light / peak</dt><dd>${f1(s.lw.res.V[p.node] || 0)} / ${f1(s.pw.res.V[p.node] || 0)} V</dd>`
+      + `<dt>${load ? 'Voltage drop at peak' : 'Voltage change on trip'}</dt><dd>${f2(Math.abs(s.dv))} %</dd>`
+      + `<dt>Host ${vaultById(hv).tr} · light</dt><dd class="${lwn.P < 0 ? 'c-crit' : ''}">${f0(lwn.P)} kW · ${f0(lwn.pct)} %</dd>`
+      + `<dt>Host ${vaultById(hv).tr} · peak</dt><dd class="${pwn.pct > 100 ? 'c-crit' : ''}">${f0(pwn.P)} kW · ${f0(pwn.pct)} %</dd>`
+      + (s.fc ? `<dt>Fault duty at PCC (${s.fc.kv === 13.8 ? '13.8 kV' : '208 V'})</dt><dd>${f1(s.fc.total)} kA (+${f2(s.fc.add)})</dd>` : '')
+      + `<dt>Network reverse-power hours</dt><dd class="${e.revH ? 'c-crit' : ''}">${f0(e.revH)} h/yr</dd></dl></div>`
+      + `<div class="ogrp"><h4>Energy · annual estimate</h4><dl class="kv">${eRows}`
+      + (p.ic === 'primary' ? '' : `<dt>Site summer peak</dt><dd>${f0(e.peakBefore)} → ${f0(e.peakAfter)} kW</dd>`) + `</dl></div>`
+      + `<div class="ogrp"><h4>Cost · illustrative</h4><dl class="kv"><dt>${T.name} installed</dt><dd>${money(s.capex)}</dd><dt>Interconnection equipment</dt><dd>${money(s.icCost)}</dd>`
+      + `<dt>Network upgrades</dt><dd class="${s.upCost ? 'c-warn' : ''}">${money(s.upCost)}</dd><dt><b>Total</b></dt><dd><b>${money(total)}</b></dd></dl></div>`
+      + `<div class="ogrp"><h4>Required equipment & conditions</h4><ul class="reqs">${reqs.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+  }
+
+  function renderOptions() {
+    const id = focusId(), el = $('options');
+    if (!id || !R.opts || R.opts.id !== id) { el.innerHTML = `<p class="empty-p">${id ? 'Comparing options…' : 'Select a project to compare every interconnection option side by side.'}</p>`; return; }
+    const p = R.list.find(x => x.id === id), load = !!TYPES[p.type].load;
+    el.innerHTML = `<table class="tbl"><thead><tr><th>Option</th><th>Verdict</th><th>${load ? 'Served' : 'Delivered'}</th><th>Curtailed</th><th>Export</th><th>Interconn.</th><th>Upgrades</th><th>Timeline</th></tr></thead><tbody>`
+      + R.opts.rows.map(r => {
+        const v = VERD[r.s.verdict], e = r.e;
+        const curt = load ? 1 - e.served / Math.max(1, e.demand) : e.curt / Math.max(1, e.avail);
+        return `<tr class="clickable${r.cur ? ' cur' : ''}" data-opt="${r.ic}"><td class="lab">${IC[r.ic].short}${r.cur ? ' <span class="c-dim">· current</span>' : ''}<span class="loc">${r.s.path}</span></td>`
+          + `<td><span class="pill ${v[1]}">${r.s.verdict === 'ok' ? 'PASS' : r.s.verdict === 'upg' ? 'UPGRADES' : 'FAIL'}</span></td>`
+          + `<td>${f0((load ? e.served : e.del) / 1000)} MWh</td><td class="${curt > 0.05 ? 'c-warn' : ''}">${f0(curt * 100)} %</td><td>${load ? '—' : f0(e.exp / 1000) + ' MWh'}</td>`
+          + `<td>${money(r.s.icCost)}</td><td class="${r.s.upCost ? 'c-warn' : ''}">${r.s.upCost ? money(r.s.upCost) : '—'}</td><td>${r.s.months ? r.s.months + ' mo' : '—'}</td></tr>`;
+      }).join('') + `</tbody></table>`;
+    $('opmeta').textContent = `${TYPES[p.type].code} ${f0(p.kw)} kW · click a row to apply`;
+  }
+
+  function renderHC() {
+    const rows = M.gridNodes.map(g => [g, R.hc[g.id]]).sort((a, b) => a[1].kw - b[1].kw);
+    $('hctable').innerHTML = `<table class="tbl"><thead><tr><th>Site</th><th>Load</th><th>Hosting cap.</th><th>Limited by</th></tr></thead><tbody>`
+      + rows.map(([g, x]) => `<tr class="clickable${sel && sel.t === 'site' && sel.id === g.id ? ' cur' : ''}" data-sel="site:${g.id}"><td class="lab">${esc(g.label)}<span class="loc">${esc(LOADOF[g.id].desc)}</span></td><td>${f0(LOADOF[g.id].kw)} kW</td>`
+        + `<td style="color:${hcCol(x.kw)}">${f0(x.kw)} kW</td><td class="l" style="font-family:var(--f-body);color:var(--dim)">${esc(x.limit)}</td></tr>`).join('') + `</tbody></table>`;
+  }
+
+  // committed queue: interconnection equipment per project plus each distinct network upgrade once
+  function portfolioSpend() {
+    const up = new Map();
+    let ic = 0;
+    for (const p of projects) { const s = R.scr.get(p.id); ic += s.icCost; s.upg.forEach(u => up.set(u.name, u.cost)); }
+    return ic + [...up.values()].reduce((a, b) => a + b, 0);
+  }
+  function renderChips() {
+    const gen = projects.filter(p => !TYPES[p.type].load).reduce((a, p) => a + p.kw, 0), ev = projects.filter(p => TYPES[p.type].load).reduce((a, p) => a + p.kw, 0);
+    const L = R.cases.light.res, P = R.cases.peak.res;
+    const cost = portfolioSpend();
+    const bad = projects.filter(p => R.scr.get(p.id).verdict === 'block').length;
+    $('chips').innerHTML = [
+      ['Queue', `${projects.length}${bad ? ` · ${bad} fail` : ''}`, bad ? 'crit' : projects.length ? 'ok' : ''],
+      ['DER nameplate', `${f2(gen / 1000)} MW`, ''],
+      ['EV charging', `${f2(ev / 1000)} MW`, ''],
+      ['NP reverse', `${L.rev.length}`, L.rev.length ? 'crit' : 'ok'],
+      ['Voltage range', `${f1(P.minV)}–${f1(L.maxV)}`, L.maxV > LIMITS.vmax || P.minV < LIMITS.vmin ? 'crit' : 'ok'],
+      ['Interconnection', money(cost), '']
+    ].map(([k, v, c]) => `<div class="chip ${c}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+    document.querySelectorAll('[data-case]').forEach(b => b.classList.toggle('on', b.dataset.case === mapCase));
+    document.querySelectorAll('[data-season]').forEach(b => b.classList.toggle('on', b.dataset.season === profSeason));
+  }
+
+  function render() {
+    renderChips(); renderMap(); renderProfile(); renderBuilder(); renderQueue(); renderScreens(); renderOutputs(); renderOptions(); renderHC(); renderChallenge();
+  }
+
+  /* ============================== challenges ============================== */
+  const sumKW = (f) => projects.filter(f).reduce((a, p) => a + p.kw, 0);
+  const allPass = (f) => projects.filter(f).length > 0 && projects.filter(f).every(p => R.scr.get(p.id).verdict === 'ok');
+  const icSpend = () => portfolioSpend();
+  const sumE = (f, k) => projects.filter(f).reduce((a, p) => a + R.en.get(p.id)[k], 0);
+  const CH = [
+    { id: 'solar', title: 'Walk-up Rooftop Solar', diff: 1, site: 'N46-11', budget: 150000,
+      brief: 'A community solar developer wants 500 kW of rooftop PV across the walk-ups at W 46 St & 11 Av. The site uses far less than that at midday, so the surplus has to go somewhere.',
+      tip: 'Full export is cheapest, but check what the surplus does to the protectors. Compare every option in the options table.',
+      setup() { draft = { type: 'pv', kw: 500, ic: 'export', cap: 125, inv: 'unity' }; },
+      obj: [
+        { text: 'Connect at least 500 kW of PV at W 46 St & 11 Av', check: () => sumKW(p => p.type === 'pv' && p.node === 'N46-11') >= 500 },
+        { text: 'Every project passes screening with no upgrades', check: () => allPass(() => true) },
+        { text: 'Deliver at least 520 MWh a year', check: () => sumE(p => p.type === 'pv', 'del') >= 520000 },
+        { text: 'Keep interconnection spend under $150k', check: () => icSpend() <= 150000 }
+      ] },
+    { id: 'chp', title: 'Office Tower CHP', diff: 2, site: 'N50-8', budget: 1600000,
+      brief: 'The owner of the office tower at W 50 St & 8 Av wants an 800 kW natural-gas CHP plant for heating and cooling. Synchronous machines add a lot of fault current to a secondary network.',
+      tip: 'Watch the fault current screen. Some options keep the machine off the 208 V grid entirely.',
+      setup() { draft = { type: 'chp', kw: 800, ic: 'nonexport', cap: 0, inv: 'unity' }; },
+      obj: [
+        { text: 'Connect at least 800 kW of CHP at W 50 St & 8 Av', check: () => sumKW(p => p.type === 'chp' && p.node === 'N50-8') >= 800 },
+        { text: 'No failed screens (upgrades allowed)', check: () => projects.length > 0 && projects.every(p => R.scr.get(p.id).verdict !== 'block') },
+        { text: 'Deliver at least 4,500 MWh a year (the plant must run for heating and cooling)', check: () => sumE(p => p.type === 'chp', 'del') >= 4500000 },
+        { text: 'Keep interconnection and upgrade spend under $1.6M', check: () => icSpend() <= 1600000 }
+      ] },
+    { id: 'ev', title: 'Theater District Fast Charging', diff: 2, site: 'N48-8', budget: 300000,
+      brief: 'A fleet operator wants a 1.2 MW fast-charging hub at W 48 St & 8 Av, beside the theaters. The local network transformer is already busy at the summer peak.',
+      tip: 'Firm service may need a new transformer. Managed charging, or a battery at the same site, can shave the peak.',
+      setup() { draft = { type: 'ev', kw: 1200, ic: 'firm', cap: 600, inv: 'unity' }; },
+      obj: [
+        { text: 'Connect at least 1,200 kW of charging at W 48 St & 8 Av', check: () => sumKW(p => p.type === 'ev' && p.node === 'N48-8') >= 1200 },
+        { text: 'Every project passes screening with no upgrades', check: () => allPass(() => true) },
+        { text: 'Serve at least 90 % of requested charging energy', check: () => { const d = sumE(p => p.type === 'ev', 'demand'); return d > 0 && sumE(p => p.type === 'ev', 'served') / d >= 0.9; } },
+        { text: 'Keep interconnection spend under $300k', check: () => icSpend() <= 300000 }
+      ] },
+    { id: 'corridor', title: 'Solar Corridor', diff: 3, site: null, budget: 450000,
+      brief: 'The city wants 3 MW of solar on Midtown West rooftops this year. No single corner can take that, and every project you add uses up hosting capacity for the next.',
+      tip: 'Spread projects across sites with healthy hosting capacity. Export caps and DERMS let a site go above its full-export limit.',
+      setup() { draft = { type: 'pv', kw: 400, ic: 'export', cap: 100, inv: 'vv' }; },
+      obj: [
+        { text: 'Connect at least 3,000 kW of PV', check: () => sumKW(p => p.type === 'pv') >= 3000 },
+        { text: 'Use at least four different sites', check: () => new Set(projects.filter(p => p.type === 'pv').map(p => p.node)).size >= 4 },
+        { text: 'Every project passes screening with no upgrades', check: () => allPass(() => true) },
+        { text: 'Deliver at least 3,800 MWh a year', check: () => sumE(p => p.type === 'pv', 'del') >= 3800000 },
+        { text: 'Keep interconnection spend under $450k', check: () => icSpend() <= 450000 }
+      ] }
+  ];
+  const DIFF = ['', 'Introductory', 'Intermediate', 'Advanced'];
+  const best = (id) => { try { return localStorage.getItem('gridgame.der.best.' + id) || ''; } catch (e) { return ''; } };
+  const saveBest = (id, g) => { try { const b = best(id); if (!b || g < b) localStorage.setItem('gridgame.der.best.' + id, g); } catch (e) { /* storage unavailable */ } };
+  function startChallenge(id) {
+    const ch = CH.find(c => c.id === id);
+    projects = []; G = { ch, st: ch.obj.map(() => false), done: false, grade: '' };
+    ch.setup(); sel = ch.site ? { t: 'site', id: ch.site } : null;
+    schedule(0);
+  }
+  function gradeOf() {
+    const r = icSpend() / G.ch.budget;
+    return r <= 0.5 ? 'A' : r <= 0.75 ? 'B' : r <= 0.9 ? 'C' : 'D';
+  }
+  function checkChallenge() {
+    if (!G || !R) return;
+    G.st = G.ch.obj.map(o => !!o.check());
+    if (!G.done && G.st.every(Boolean) && projects.length) { G.done = true; G.grade = gradeOf(); saveBest(G.ch.id, G.grade); }
+    else if (G.done && !G.st.every(Boolean)) { G.done = false; G.grade = ''; }
+    renderChallenge();
+  }
+  function renderChallenge() {
+    const el = $('mission'), tog = $('ch-toggle');
+    el.hidden = chMin; tog.textContent = chMin ? '+' : '–'; tog.title = chMin ? 'Expand' : 'Minimize'; tog.setAttribute('aria-expanded', String(!chMin));
+    $('ch-ph').classList.toggle('collapsed', chMin);
+    if (!G) {
+      $('ch-meta').textContent = chMin ? `${CH.length} available` : 'sandbox';
+      el.innerHTML = `<p class="note">Sandbox mode. Connect anything anywhere, or take a developer's request and meet the brief at the lowest interconnection cost.</p><div class="scens">`
+        + CH.map(c => `<div class="scen"><div class="scen-h"><b>${c.title}</b><span class="diff d${c.diff}" title="${DIFF[c.diff]}">${'▮'.repeat(c.diff)}${'▯'.repeat(3 - c.diff)}</span></div><p>${c.brief}</p>`
+          + `<div class="scen-f"><span class="c-dim num">budget ${money(c.budget)}${best(c.id) ? ` · best ${best(c.id)}` : ''}</span><button class="btn primary" data-start="${c.id}">Start</button></div></div>`).join('') + `</div>`;
+      return;
+    }
+    const spend = R ? icSpend() : 0, pct = Math.min(100, spend / G.ch.budget * 100), n = G.st.filter(Boolean).length;
+    $('ch-meta').textContent = G.done ? `complete · grade ${G.grade}` : `${n}/${G.ch.obj.length} objectives`;
+    el.innerHTML = (G.done ? `<div class="deb"><div class="grade g${G.grade}">${G.grade}</div><div><h3>${G.ch.title}</h3><p class="note">Brief met for ${money(spend)} of interconnection spend (${f0(spend / G.ch.budget * 100)} % of budget). Spend less for a better grade.</p></div></div>`
+        : `<div><h3>${G.ch.title}</h3><div class="type">${DIFF[G.ch.diff]} · ${G.ch.site ? siteName(G.ch.site) : 'any sites'}</div></div><p class="note">${G.ch.brief}</p><p class="note tip">${G.ch.tip}</p>`)
+      + `<ul class="objs">${G.ch.obj.map((o, i) => `<li><span style="color:${G.st[i] ? 'var(--ok)' : 'var(--dim)'}">${G.st[i] ? '●' : '○'}</span><span class="${G.st[i] ? 'c-dim' : ''}">${o.text}</span></li>`).join('')}</ul>`
+      + `<div class="budget"><div style="display:flex;justify-content:space-between"><span class="c-dim">Interconnection spend</span><span class="num">${money(spend)} / ${money(G.ch.budget)}</span></div><div class="bbar"><span style="width:${pct}%;background:${spend > G.ch.budget ? 'var(--crit)' : 'var(--mv)'}"></span></div></div>`
+      + `<div class="btnrow"><button class="btn" data-start="${G.ch.id}">Restart</button><button class="btn" data-exit="1">Back to challenges</button></div>`;
+  }
+
+  /* ============================== events ============================== */
+  function target() { return selProj() || (sel && sel.t === 'site' ? draft : null); }
+  function setType(t, type) {
+    t.type = type; const T = TYPES[type];
+    if (!T.ic.includes(t.ic)) t.ic = T.ic[0];
+    t.kw = Math.min(t.kw, T.max);
+    if (!t.cap || t.cap > t.kw) t.cap = Math.round(t.kw * (T.load ? 0.5 : 0.25) / 5) * 5;
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-case],[data-season],[data-start],[data-exit],[data-type],[data-act],[data-del],[data-opt],[data-sel]');
+    if (!b) return;
+    const d = b.dataset;
+    if (d.case) { mapCase = d.case; renderChips(); renderMap(); return; }
+    if (d.season) { profSeason = d.season; renderChips(); renderProfile(); return; }
+    if (d.start) { startChallenge(d.start); return; }
+    if (d.exit) { G = null; projects = []; sel = null; schedule(0); return; }
+    if (d.type) { const t = target(); if (t) { setType(t, d.type); renderBuilderForce(); schedule(); } return; }
+    if (d.del) { e.stopPropagation(); projects = projects.filter(p => String(p.id) !== d.del); if (sel && sel.t === 'proj' && String(sel.id) === d.del) sel = null; schedule(0); return; }
+    if (d.opt) { const t = target(); if (t) { t.ic = d.opt; if (IC[d.opt].cap && (!t.cap || t.cap > t.kw)) t.cap = Math.round(t.kw * 0.25 / 5) * 5; renderBuilderForce(); schedule(0); } return; }
+    if (d.act === 'add') { const p = { ...draft, id: nextId++, node: sel.id }; projects.push(p); sel = { t: 'proj', id: p.id }; schedule(0); return; }
+    if (d.act === 'remove') { const p = selProj(); projects = projects.filter(x => x !== p); sel = { t: 'site', id: p.node }; schedule(0); return; }
+    if (d.act === 'desel') { sel = null; schedule(0); return; }
+    if (d.sel) { const [t, ...rest] = d.sel.split(':'); const id = rest.join(':'); sel = t === 'proj' ? { t, id: +id } : { t, id }; schedule(0); }
+  });
+  function renderBuilderForce() { if (document.activeElement && $('builder').contains(document.activeElement)) document.activeElement.blur(); renderBuilder(); }
+  $('builder').addEventListener('input', (e) => {
+    const t = target(); if (!t) return;
+    const id = e.target.id;
+    if (id === 'f-kw' || id === 'f-kwn') {
+      t.kw = Math.max(25, Math.min(TYPES[t.type].max, Math.round(+e.target.value / 5) * 5 || 25));
+      if (t.cap > t.kw) t.cap = t.kw;
+      $('f-kwv').textContent = `${f0(t.kw)} ${TYPES[t.type].unit}`;
+      if (id === 'f-kw') $('f-kwn').value = t.kw; else $('f-kw').value = t.kw;
+      const cap = $('f-cap'); if (cap) { cap.max = t.kw; cap.value = t.cap; $('f-capv').textContent = f0(t.cap) + ' kW'; }
+      schedule(120);
+    } else if (id === 'f-cap') { t.cap = +e.target.value; $('f-capv').textContent = f0(t.cap) + ' kW'; schedule(120); }
+  });
+  $('builder').addEventListener('change', (e) => {
+    const t = target(); if (!t) return;
+    if (e.target.id === 'f-ic') { t.ic = e.target.value; if (IC[t.ic].cap && (!t.cap || t.cap > t.kw)) t.cap = Math.round(t.kw * 0.25 / 5) * 5; renderBuilderForce(); schedule(0); }
+    else if (e.target.id === 'f-inv') { t.inv = e.target.value; schedule(0); }
+    else if (e.target.id === 'f-kwn') { e.target.blur(); }
+  });
+  $('builder').addEventListener('focusout', () => setTimeout(() => { if (!$('builder').contains(document.activeElement)) renderBuilder(); }, 0));
+  $('reset').addEventListener('click', () => { projects = []; sel = null; if (G) G = null; schedule(0); });
+  $('ch-toggle').addEventListener('click', () => { chMin = !chMin; try { localStorage.setItem('gridgame.der.chMin', chMin ? '1' : '0'); } catch (e) { /* storage unavailable */ } renderChallenge(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('builder').contains(document.activeElement)) { sel = null; schedule(0); } });
+
+  window.DERPlanner = { get R() { return R; }, get projects() { return projects; }, screen, simulate, energy, hostingCapacity, CASES, LIGHT_KW, PEAK_KW };
+  recalc();
+})();
+</script>
+<script>
+/* Embed support: when framed (e.g. Squarespace), report content height to the parent page. */
+(function () {
+  if (window.parent === window) return;
+  var last = 0;
+  function post() {
+    var h = Math.ceil(document.body.getBoundingClientRect().height);
+    if (h && h !== last) { last = h; window.parent.postMessage({ type: 'gridgame:height', height: h }, '*'); }
+  }
+  window.addEventListener('load', post);
+  window.addEventListener('message', function (e) { if (e.data && e.data.type === 'gridgame:ping') { last = 0; post(); } });
+  try { new ResizeObserver(post).observe(document.body); } catch (e) { setInterval(post, 1000); }
+  post();
+})();
+</script>
+</body>
+</html>
