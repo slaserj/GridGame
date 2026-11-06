@@ -17,7 +17,7 @@ python -m http.server 8000
 1. Push this folder to a GitHub repository (files at the repo root).
 2. In the repo, go to **Settings → Pages**.
 3. Under **Build and deployment**, choose **Deploy from a branch**, branch `main`, folder `/ (root)`.
-4. The site will be live at `https://<user>.github.io/<repo>/` within a minute or two.
+4. The site is live at https://sim.jonesgrid.com/ (custom domain set in `CNAME`).
 
 ## Embedding in Squarespace
 
